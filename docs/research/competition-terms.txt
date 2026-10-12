@@ -1,0 +1,189 @@
+                       Cloudflare, Inc. Build the Next-Gen Git Platform on Cloudflare Competition
+
+                                                         Official Rules
+
+NO PURCHASE OR PAYMENT OF ANY KIND IS NECESSARY TO PARTICIPATE IN THIS CONTEST. A PURCHASE OR
+PAYMENT WILL NOT INCREASE YOUR CHANCES OF WINNING. VOID OUTSIDE OF THE UNITED STATES AND
+CANADA, AND WHERE PROHIBITED OR RESTRICTED BY LAW.
+
+   1.​   Sponsor: Build the Next-Gen Git Platform on Cloudflare Competition (“Contest”) is sponsored by Cloudflare, Inc.,
+         101 Townsend Street, San Francisco, CA 94107 (“Sponsor”).
+   2.​   Contest Period: The Contest will begin on October 1, 2026 at 9:00 AM EDT (“Start Time”) and end on October 14,
+         2026 at 11:59 PM PDT (“Contest Period”). Sponsor’s computer or that of its designee shall serve as the official time
+         keeping device for the Contest.
+   3.​   Eligibility: To enter and be eligible to win, entrants (“Entrants”) must: (1) be a legal resident of the United States or
+         Canada; and (2) be eighteen (18) years of age or older as of the Start Time. The Contest is subject to all applicable laws
+         and regulations, and is void where prohibited. The following individuals are not eligible to enter or win the Contest:
+               ●​ Individuals subject to sanctions or otherwise designated on any list of prohibited or restricted parties,
+                    including but not limited to the lists maintained by the U.S. Government (e.g., the Specially Designated
+                    Nationals List and Foreign Sanctions Evaders List of the U.S. Department of Treasury, and the Entity List of
+                    the U.S. Department of Commerce), the United Kingdom, the European Union or its Member States, or other
+                    applicable government authority;
+               ●​ Employees, officers, and directors of Sponsor, its affiliates, subsidiaries, and agencies, and their immediate
+                    families (parents, siblings, children, and spouses of each, regardless of where they live) and members of the
+                    households (whether related or not) of such employees, officers, and directors; and
+               ●​ Employees, officers, and directors of any federal, state, local, or foreign government department, agency,
+                    public sector enterprise, or state-owned entity.
+   4.​   How to Enter: During the Contest Period, Entrants must complete and submit an application listed on the competition
+         website (the “Application”). To submit a valid Application, Entrants must provide all required information, as well as a
+         5–10 minute demonstration video, the repository containing the source code (“Project”), and instructions for running
+         the Project. Entrants must also indicate their agreement to these Official Rules by selecting “Yes” on the Terms and
+         Conditions within the Application form (each completed Application, a “Submission”). All Submissions must be
+         received by the end of the Contest Period. Submissions received after the end of the Contest Period, or that are
+         incomplete, illegible, or otherwise not in compliance with these Official Rules, will be void. Sponsor is not responsible
+         for lost, late, misdirected, or incomplete Submissions. By submitting an Application, Entrant confirms that they meet
+         all eligibility requirements set forth in Section 3. Sponsor reserves the right to verify the eligibility of any Entrant at
+         any time. All Submissions must abide by the following criteria (“Submission Criteria”):
+               ●​ Submissions must be Entrant’s own original content and creation. Entrants may not copy or otherwise
+                    plagiarize Submissions from any source, nor may Submissions include third-party copyrighted material or
+                    artwork without the copyright holder’s permission. Entrants must not violate the terms of service of any third
+                    parties in the creation of their Submissions. By entering, Entrants warrant that their Submissions do not
+                    infringe any third party’s rights and that they have obtained any necessary permissions from all relevant third
+                    parties to submit the Submissions. Entrants hereby agree to indemnify Sponsor against any and all claims
+                    from any third party for any use by Sponsor of the Submissions.
+               ●​ Entrants must use Cloudflare’s developer platform, including Cloudflare Workers and Artifacts, to build their
+                    Project, which must enable multiple agents working on changes concurrently.
+               ●​ The Project source code must be licensed under the MIT License, the Apache License 2.0, or the BSD
+                    2-Clause or 3-Clause License, and the repository must include a LICENSE file identifying the license.
+               ●​ Submissions may not contain personal attacks on anyone or any discernible product, including competitor
+                    products.
+               ●​ Submissions may not involve weapons, sexual content, political content, illegal activity, or other content or
+                    subject matter that Sponsor, in its sole discretion, determines to be inappropriate.
+         Sponsor reserves the right to exclude any Submission that it believes, in its sole discretion, does not meet the
+         Submission Criteria or otherwise violates these Official Rules. Persons may not enter using robotic, programmed, or
+         any other automated means of entry for their Submissions. Each Entrant is limited to one (1) Submission.
+5.​   Conditions of Entry: By entering, Entrants (1) acknowledge compliance with these Official Rules, including all
+      eligibility requirements, and (2) agree to be bound by the decisions of the Sponsor and/or judges, made in their sole
+      discretion, which shall be final and binding in all matters relating to this Contest. The Official Rules do not supersede
+      but work in conjunction with the Cloudflare Website and Online Services Terms of Use and Privacy Policy.
+      ENTRANTS WHO HAVE NOT COMPLIED WITH THESE OFFICIAL RULES ARE SUBJECT TO
+      DISQUALIFICATION AND ALL ASSOCIATED SUBMISSIONS WILL BE VOID. Sponsor is not responsible for
+      late, lost, damaged, stolen, misdirected, mutilated, garbled, incomplete, undelivered, or inaccurate Submissions. Proof
+      of transmission does not constitute proof of delivery. Sponsor reserves the right to disqualify any Entrant’s entry in the
+      Contest or entitlement to a prize, if, in the sole discretion of the Sponsor, it determines or suspects that the Entrant has
+      attempted to undermine the legitimate operation of the Contest by cheating, hacking, deception, or other fraudulent,
+      deceptive or unfair playing practices (including any Applications generated by script, macro, robotic, programmed, or
+      any other automated means and Submissions by any means which subvert the entry process). If a dispute arises
+      regarding who entered the Submission, the Submission will be deemed to be submitted by the authorized account
+      holder associated with the entry. “Authorized account holder” is defined as the natural person who is assigned to an
+      email address, by an Internet access provider, online service provider, or other organization responsible for assigning
+      email addresses for the domain associated with the email address.
+6.​   Finalist Selection: From eligible Submissions received during the Contest Period, Sponsor will select three (3) finalists
+      (“Finalists”) based on (1) originality and quality of the prototype for agent-oriented software collaboration (50%), (2)
+      effectiveness of multi-agent concurrency, coordination, context preservation, review, and conflict handling (25%), and
+      (3) ease of use and product/user experience (25%), scored on a scale of 1–5 each. In the event of a tie, Finalists will be
+      determined by the highest score in the “originality and quality of the prototype for agent-oriented software
+      collaboration” category. Finalists will be notified in advance of Cloudflare Connect and will each have ten (10) minutes
+      to present their project live on stage at Cloudflare Connect, Moscone West, San Francisco, California, on October 21,
+      2026. Sponsor may provide reasonable travel and hotel accommodations and tickets to Cloudflare Connect for up to
+      two (2) representatives per Finalist, as determined by Sponsor. Finalists are responsible for passports, visas, travel
+      documents, incidentals, meals, personal expenses, and any costs not approved by Sponsor. Travel benefits are not
+      transferable or redeemable for cash.
+7.​   Winner Selection: The potential winner will be announced at Cloudflare Connect. The judging criteria will be the
+      same as the Finalist Selection criteria described in Section 6, above. The decision of judges will be final. The potential
+      winner may be sent a declaration of eligibility and liability / intellectual property / publicity release (“Release”). The
+      potential winners must be physically present at Cloudflare Connect to be eligible.
+8.​   Prizes: The first place team selected by the judges will receive (i) $25,000 USD in Cloudflare credits valid for twelve
+      (12) months starting from the date the prize is awarded (Approximate Retail Value (“ARV”): $25,000 USD) and (ii) an
+      invitation to the Cloudflare Connect VIP Speakers Dinner (ARV: $200 USD). Actual retail value of the prize may differ
+      from stated ARV and Sponsor will not award any difference between actual value and ARV. Prize recipients are solely
+      responsible for any taxes associated with prize acceptance. Prizes are not transferable or redeemable for cash.
+9.​   License: By participating in the Contest, each Entrant grants Sponsor the right, without limitation, to use the Entrant’s
+      name, city, state, likeness, photo, company name and logo, demonstration video, and any presentation materials or
+      recordings of Entrant’s presentation (“Content”) in connection with the Contest for promotional, advertising or other
+      purposes, and to display the Content in any media now known or hereinafter developed. Content does not include the
+      Application or Entrant’s Project, which Sponsor may use solely to administer and judge the Contest. Entrants further
+      agree to grant to the Sponsor a world-wide, royalty free, non-exclusive, perpetual, irrevocable license to reproduce and
+      use the Content for any purpose whatsoever without compensation or further permission, including but not limited to an
+      irrevocable and perpetual, royalty-free, worldwide right, in all media (now known or later developed) to assign,
+      sub-license, use, publish, edit, adapt, modify, alter, reproduce, distribute, broadcast, display, copyright, create derivative
+      works or otherwise exploit the Content for commercial or non-commercial use, and without compensation to the
+      Entrant. Entrant represents that they are authorized to grant these rights. If requested, Entrants will sign any
+      documentation that may be required for Sponsor or its designees to make use of the non-exclusive rights Entrant is
+      granting to Sponsor. Additionally, Entrant will provide Sponsor with access to their Project, including its complete
+      source code in accordance with the requirements under Section 4, as needed to administer and judge the Contest.
+      Entrants retain all right, title, and interest in their Projects and all intellectual property rights therein. Submissions,
+      including Projects, are not confidential. Sponsor and its affiliates develop products and services that may be similar to
+      or compete with Projects, and nothing in these Official Rules restricts Sponsor from independently developing,
+     acquiring, or marketing such products or services. No implied obligation, confidential relationship, or compensation
+     arises from submission of a Submission.
+10.​ Privacy: Sponsor will collect personal information about Entrants when they participate in the Contest. Sponsor will
+     use and share personal information in order to fulfill the requirements of the Contest. For example, the Sponsor may
+     share personal information with third parties who help to administer the Contest. By participating in the Contest and
+     agreeing to these Official Rules, Entrant hereby consents to the Sponsor using Entrant’s personal information in this
+     manner. Information submitted to Sponsor as part of the Contest will be treated in accordance with the privacy policy
+     located at https://www.cloudflare.com/privacypolicy/.
+11.​ Release: By participating in the Contest, Entrants agree: (1) to be bound by these Official Rules and any other
+     documents required by Sponsor herein and by the decisions of the Sponsor, and to waive any right to claim ambiguity
+     in this Contest, these Official Rules or any other documents required by Sponsor herein, (2) to indemnify, defend and
+     hold harmless Sponsor and its officers, directors, employees, shareholders, representatives and agents (collectively,
+     “Released Parties”) from and against any and all liability, claims, losses, damages, demands, causes of action,
+     penalties and expenses arising out of or related to any statement, action or failure to act by Entrant during or in
+     connection with his/her participation herein and/or any breach or alleged breach of these Official Rules or of any other
+     documents required by Sponsor and, (3) not to sue and to hereby irrevocably and unconditionally release, discharge and
+     hold harmless the Released Parties from any and all liabilities, claims and demands of any kind or nature whatsoever, in
+     law or equity, whether known or unknown, which recipient (or recipient’s successors-in-interest, heirs and/or agents)
+     ever had, now have, or in the future may have against the Released Parties, including, but not limited to claims arising
+     out of or related to personal injury (including death) and/or damage, theft, loss or any other harm resulting in whole or
+     in part, directly or indirectly, from (i) participation in the Contest or any Contest related activity, (ii) the acceptance,
+     possession, misuse or use of the prize, (iii) the use of any of the rights granted herein (including, without limitation, the
+     use and exploitation of the Content), (iv) any malfunction or other problem with any Contest website, webpage, or
+     mobile application, (v) any error in the collection or retention of entry information, and (vi) any typographical or other
+     error in the printing, offering or announcement of any prize.
+12.​ Limitations of Liability: RELEASED PARTIES ARE NOT RESPONSIBLE FOR: (1) ANY INCORRECT OR
+     INACCURATE INFORMATION, WHETHER CAUSED BY AN ENTRANT, PRINTING, TYPOGRAPHICAL OR
+     OTHER ERRORS OR BY ANY OF THE EQUIPMENT OR PROGRAMMING ASSOCIATED WITH OR
+     UTILIZED IN THE CONTEST; (2) TECHNICAL FAILURES OF ANY KIND, INCLUDING, BUT NOT LIMITED
+     TO MALFUNCTIONS, INTERRUPTIONS, OR DISCONNECTIONS IN PHONE LINES OR NETWORK
+     HARDWARE OR SOFTWARE; (3) UNAUTHORIZED HUMAN INTERVENTION IN ANY PART OF THE ENTRY
+     PROCESS OR THE CONTEST; (4) PRINTING, TYPOGRAPHICAL, TECHNICAL, COMPUTER, NETWORK OR
+     HUMAN ERROR WHICH MAY OCCUR IN THE ADMINISTRATION OF THE CONTEST, THE
+     ANNOUNCEMENT OF THE PRIZES OR IN ANY CONTEST-RELATED MATERIALS; (5) LATE, LOST,
+     UNDELIVERABLE, INACCESSIBLE, CORRUPTED, DAMAGED, DELETED OR STOLEN ENTRIES; OR (6)
+     ANY INJURY OR DAMAGE TO PERSONS OR PROPERTY WHICH MAY BE CAUSED, DIRECTLY OR
+     INDIRECTLY, IN WHOLE OR IN PART, FROM ENTRANT’S PARTICIPATION IN THE CONTEST OR RECEIPT
+     OR USE OR MISUSE OF ANY PRIZE. EXCEPT WHERE PROHIBITED BY LAW, EVERYTHING REGARDING
+     THIS CONTEST, INCLUDING THE PRIZE, IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND,
+     EITHER EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+     MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.
+13.​ Termination / Suspension / Modification of Contest: If for any reason this Contest is not capable of running as
+     planned, including, but not limited to, infection by computer virus, bugs, tampering, unauthorized intervention, fraud or
+     any other causes beyond the reasonable control of Sponsor which corrupt or affect the administration, security, fairness,
+     integrity, fulfillment or proper conduct of the Contest, Sponsor reserves the right in its sole discretion to terminate,
+     modify, or suspend the Contest. Sponsor may also disqualify or prohibit an Entrant from participating in the Contest or
+     winning a prize in this or any other promotion conducted by Sponsor if, at its sole discretion, it determines that said
+     Entrant has violated the Official Rules or has threatened or is attempting to undermine the legitimate operation of the
+     Contest by cheating, hacking, deception or other unfair playing practices (including the use of automated quick-entry
+     programs for Submissions), or intending to annoy, abuse, threaten or harass any other Entrants or Sponsor’s
+     representatives. ANY ATTEMPT BY AN ENTRANT TO DELIBERATELY UNDERMINE THE LEGITIMATE
+     OPERATION OF THE CONTEST MAY BE IN VIOLATION OF CRIMINAL AND CIVIL LAWS. SHOULD SUCH
+     AN ATTEMPT BE MADE, SPONSOR RESERVES THE RIGHT TO SEEK REMEDIES AND DAMAGES
+     (INCLUDING ATTORNEY’S FEES) FROM ANY SUCH ENTRANT TO THE FULLEST EXTENT OF THE LAW,
+     INCLUDING CRIMINAL PROSECUTION.
+14.​ Mandatory Arbitration: BY ENTERING THE CONTEST, EACH ENTRANT AGREES THAT DISPUTES WILL
+     BE RESOLVED AS FOLLOWS: THE CONTEST IS GOVERNED BY THE LAWS OF THE STATE OF
+     CALIFORNIA, WITHOUT REGARD TO ANY CONFLICTS OF LAW PROVISIONS. ALL DISPUTES, CLAIMS
+     OR DEMANDS THAT RELATE TO THESE OFFICIAL RULES OR THE CONTEST WILL FIRST BE BROUGHT
+     TO THE ATTENTION OF THE OTHER PARTY AND WILL BE RESOLVED INDIVIDUALLY, WITHOUT
+     RESORT TO ANY FORM OF CLASS ACTION. THE RECEIVING PARTY SHALL HAVE SIXTY (60) DAYS
+     FROM THE DATE OF SUCH NOTICE TO REMEDY THE DESCRIBED BREACH OR VIOLATION AND
+     NOTIFY THE COMPLAINING PARTY IN WRITING OF THE RESOLUTION. IF THE DISPUTE, CLAIM OR
+     DEMAND IS NOT RESOLVED TO THE SATISFACTION OF THE COMPLAINANT WITHIN SIXTY (60) DAYS,
+     THE COMPLAINANT MAY REQUEST AN INFORMAL RESOLUTION CONFERENCE (MEDIATION), WHICH
+     IF AGREED TO BY THE OTHER PARTY WILL BE SCHEDULED TO OCCUR WITHIN TWENTY-ONE (21)
+     DAYS OF THE WRITTEN RESPONSE. EACH PARTY SHALL HAVE THE RIGHT TO BE REPRESENTED AT
+     SUCH A CONFERENCE BY COUNSEL AND WILL ENSURE THAT A DECISION-MAKER WITH FULL AND
+     COMPLETE AUTHORITY TO RESOLVE THE DISPUTE ATTENDS THE CONFERENCE. SUCH CONFERENCE
+     WILL BE IN FRONT OF A THIRD PARTY MEDIATOR CHOSEN BY THE PARTIES. IF THE PARTIES DO NOT
+     AGREE TO CONFERENCE OR ARE UNABLE TO RESOLVE A DISPUTE AFTER SUCH A CONFERENCE,
+     THE PARTIES AGREE THAT EXCLUSIVE JURISDICTION FOR ANY DISPUTE, CLAIM OR DEMAND
+     RELATED IN ANY WAY TO THESE RULES WILL BE DECIDED BY BINDING ARBITRATION. ALL
+     DISPUTES BETWEEN THE PARTIES, OF WHATSOEVER KIND OR NATURE ARISING OUT OF THESE
+     RULES, SHALL BE SUBMITTED TO JAMS (www.jamsadr.com) FOR BINDING ARBITRATION UNDER ITS
+     APPLICABLE RULES THEN IN EFFECT, BEFORE ONE ARBITRATOR TO BE MUTUALLY AGREED UPON
+     BY BOTH PARTIES IN THE CITY OF SAN FRANCISCO IN THE STATE OF CALIFORNIA. THE PARTIES
+     AGREE TO SHARE EQUALLY IN THE ARBITRATION COSTS INCURRED.
+15.​ List of Winner: A list of members of the winning team will be available upon request for one (1) year after the winner
+     announcement. Please send any request for such a list to git-competition@cloudflare.com. The names of the potential
+     winning team members may, at the sole discretion of the Company, be posted on the Company’s website.
+

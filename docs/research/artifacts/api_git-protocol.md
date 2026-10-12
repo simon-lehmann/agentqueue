@@ -1,0 +1,97 @@
+---
+description: Use Artifacts with standard git-over-HTTPS clients.
+title: Git protocol
+image: https://developers.cloudflare.com/artifacts/api/git-protocol/og.png?v=f01247e8a935569e
+---
+
+[Skip to content](#main-content)
+
+> Documentation Index  
+> Fetch the complete documentation index at: https://developers.cloudflare.com/artifacts/llms.txt  
+> Use this file to discover all available pages before exploring further.
+
+# Git protocol
+
+Last updated Apr 25, 2026|Copy as Markdown| [View as Markdown](https://developers.cloudflare.com/artifacts/api/git-protocol/index.md)| [Agent setup](https://developers.cloudflare.com/agent-setup/)
+
+Artifacts exposes Git access for every Artifacts repository.
+
+Each repo has a standard Git smart HTTP remote at `https://<ACCOUNT_ID>.artifacts.cloudflare.net/git/<namespace>/<repo>.git`.
+
+Replace the `<ACCOUNT_ID>` placeholder with your Cloudflare account ID. Use the exact hostname from the repo `remote` returned by the Workers binding or REST API.
+
+Use the returned repo `remote` with a regular Git client for `clone`, `fetch`, `pull`, and `push`.
+
+## Authentication
+
+Git routes accept repo access tokens in two forms:
+
+| Format | Details | Example |
+| --- | --- | --- |
+| Bearer token in `http.extraHeader` | Recommended for local workflows. Use the full token string returned by the control plane and keep credentials out of the remote URL. | `git -c http.extraHeader="Authorization: Bearer $ARTIFACTS_TOKEN" clone "$ARTIFACTS_REMOTE" artifacts-clone` |
+| HTTP Basic auth in the remote URL | Use for short-lived, one-off commands when you need a self-contained remote. Put the token secret in the password slot. | `https://x:<token-secret>@<ACCOUNT_ID>.artifacts.cloudflare.net/git/<namespace>/<repo>.git` |
+
+### Token format
+
+Repo tokens are issued in the format `art_v1_<40 hex>?expires=<unix_seconds>`. The `?expires=` suffix is the token's expiry as a unix timestamp in seconds. To check when a token expires, parse the value after `?expires=`.
+
+### Git `extraHeader` parameter
+
+Git's [`http.extraHeader` ↗︎](https://git-scm.com/docs/git-config#Documentation/git-config.txt-httpextraHeader) setting lets you attach an HTTP header to git requests.
+
+If you want to use the full token string returned by the API, pass it as a Bearer token:
+
+```sh
+git -c http.extraHeader="Authorization: Bearer $ARTIFACTS_TOKEN" clone "$ARTIFACTS_REMOTE" artifacts-clone
+```
+
+### HTTPS remote with Basic auth
+
+For the URL form, use the token secret in the password slot. Artifacts ignores the Basic auth username.
+
+Use this form only when you need a self-contained remote URL for a short-lived command.
+
+```sh
+export ARTIFACTS_TOKEN_SECRET="${ARTIFACTS_TOKEN%%\?expires=*}"
+export ARTIFACTS_AUTH_REMOTE="https://x:${ARTIFACTS_TOKEN_SECRET}@${ARTIFACTS_REMOTE#https://}"
+```
+
+```sh
+git clone "$ARTIFACTS_AUTH_REMOTE" artifacts-clone
+```
+
+```sh
+git push "$ARTIFACTS_AUTH_REMOTE" HEAD:main
+```
+
+Use any non-empty username in the URL. Artifacts accepts that username but does not otherwise use or log it, so `x` is just a placeholder.
+
+## Protocol support
+
+Artifacts supports Git protocol v1 and v2 for clone and fetch. Git clients negotiate the protocol automatically.
+
+| Operation | Git service | Protocol support | Notes |
+| --- | --- | --- | --- |
+| Clone and fetch | `git-upload-pack` | v1 and v2 | Protocol v2 supports `ls-refs` and `fetch`. Protocol v1 supports normal fetch flows, including shallow and deepen fetches. |
+| Push | `git-receive-pack` | v1 | Push uses the standard v1 receive-pack flow. |
+| Push over protocol v2 | `git-receive-pack` | Not supported | Artifacts does not support v2 receive-pack. |
+| Optional protocol v1 capabilities | `git-upload-pack` | Partial | Some optional v1 capabilities, such as `filter` and `include-tag`, are not supported. |
+
+## Token scopes
+
+| Scope | Commands | Notes |
+| --- | --- | --- |
+| `read` | `git clone`, `git fetch`, `git pull` | Use for read-only access. |
+| `write` | `git clone`, `git fetch`, `git pull`, `git push` | `git push` mutates the repo and requires a write token. |
+
+Was this helpful?
+
+YesNo
+
+## On this page
+
+[![](https://developers.cloudflare.com/_astro/logo.te5VL_aD.svg)Docs](https://developers.cloudflare.com/)
+
+```json
+{"@context":"https://schema.org","@type":"TechArticle","@id":"https://developers.cloudflare.com/artifacts/api/git-protocol/#page","headline":"Git protocol","description":"Use Artifacts with standard git-over-HTTPS clients.","url":"https://developers.cloudflare.com/artifacts/api/git-protocol/","inLanguage":"en","image":"https://developers.cloudflare.com/artifacts/api/git-protocol/og.png?v=f01247e8a935569e","dateModified":"2026-04-25","publisher":{"@type":"Organization","name":"Cloudflare","description":"One platform for your apps, agents, and workforce. Build, secure, and scale without managing infrastructure","url":"https://www.cloudflare.com/","sameAs":["https://github.com/cloudflare","https://www.linkedin.com/company/cloudflare","https://x.com/cloudflare"],"logo":{"@type":"ImageObject","url":"https://developers.cloudflare.com/logo.svg"},"address":{"@type":"PostalAddress","streetAddress":"101 Townsend St","addressLocality":"San Francisco","addressRegion":"CA","postalCode":"94107","addressCountry":"US"},"contactPoint":[{"@type":"ContactPoint","contactType":"Customer Support","url":"https://support.cloudflare.com/","availableLanguage":["English"]},{"@type":"ContactPoint","contactType":"Sales","url":"https://www.cloudflare.com/contact/","availableLanguage":["English"]}]},"isPartOf":{"@type":"WebSite","@id":"https://developers.cloudflare.com/#website","name":"Cloudflare Docs","url":"https://developers.cloudflare.com/"}}
+```

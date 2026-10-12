@@ -1,0 +1,134 @@
+---
+description: Choose auth for bindings, API calls, and Git.
+title: Authentication
+image: https://developers.cloudflare.com/artifacts/guides/authentication/og.png?v=5e103971d5cf365b
+---
+
+[Skip to content](#main-content)
+
+> Documentation Index  
+> Fetch the complete documentation index at: https://developers.cloudflare.com/artifacts/llms.txt  
+> Use this file to discover all available pages before exploring further.
+
+# Authentication
+
+Last updated Apr 25, 2026|Copy as Markdown| [View as Markdown](https://developers.cloudflare.com/artifacts/guides/authentication/index.md)| [Agent setup](https://developers.cloudflare.com/agent-setup/)
+
+Artifacts uses a different authentication path for each interface. Choose auth based on how your code reaches the repo.
+
+Review [Namespaces](https://developers.cloudflare.com/artifacts/concepts/namespaces/) first, then use one namespace name consistently across each interface.
+
+## Compare auth methods
+
+| Interface | Authenticate with | Permissions or scopes | Use for |
+| --- | --- | --- | --- |
+| Workers binding | Configured `artifacts` binding | Wrangler auth is only for local Wrangler commands such as `dev` and `deploy`. | Worker code that calls `env.ARTIFACTS` |
+| REST API | Cloudflare API token in `Authorization: Bearer ...` | **Artifacts** > **Read** for read routes and **Artifacts** > **Edit** for write routes. | Control-plane HTTP requests |
+| Git protocol | Repo-scoped Artifacts token | `read` for clone, fetch, and pull. `write` for push. | Standard Git over HTTPS |
+
+Cloudflare API tokens authenticate control-plane access. Repo-scoped Artifacts tokens authenticate Git access.
+
+## Authenticate the Workers binding
+
+The Workers binding uses the `artifacts` binding you configure in Wrangler. Your Worker code does not pass a token when it calls `env.ARTIFACTS`.
+
+Add the binding in your Wrangler config:
+
+```jsonc
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "artifacts-worker",
+  "main": "src/index.ts",
+  // Set this to today's date
+  "compatibility_date": "2026-10-12",
+  "artifacts": [
+    {
+      "binding": "ARTIFACTS",
+      "namespace": "default"
+    }
+  ]
+}
+```
+
+```toml
+name = "artifacts-worker"
+main = "src/index.ts"
+# Set this to today's date
+compatibility_date = "2026-10-12"
+
+[[artifacts]]
+binding = "ARTIFACTS"
+namespace = "default"
+```
+
+At runtime, deployed Workers use the configured binding directly. For local Wrangler commands such as `wrangler dev`, `wrangler deploy`, or `wrangler types`, authenticate Wrangler first. For local OAuth authentication, refer to [`wrangler login`](https://developers.cloudflare.com/workers/wrangler/commands/general/#login). For CI or headless environments, refer to [Running Wrangler in CI/CD](https://developers.cloudflare.com/workers/ci-cd/).
+
+## Authenticate the REST API
+
+The REST API uses a Cloudflare API token in the `Authorization` header.
+
+```sh
+export ACCOUNT_ID="<YOUR_ACCOUNT_ID>"
+export ARTIFACTS_NAMESPACE="default"
+export CLOUDFLARE_API_TOKEN="<YOUR_API_TOKEN>"
+export ARTIFACTS_BASE_URL="https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/artifacts/namespaces/$ARTIFACTS_NAMESPACE"
+```
+
+Read repo metadata:
+
+```bash
+curl "$ARTIFACTS_BASE_URL/repos/starter-repo" \
+  --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+```
+
+Create a repo:
+
+```bash
+curl --request POST "$ARTIFACTS_BASE_URL/repos" \
+  --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "name": "starter-repo"
+  }'
+```
+
+## Authenticate the Git protocol
+
+Git uses repo-scoped Artifacts tokens, not Cloudflare API tokens. Mint these tokens from the Workers binding or the REST API, then use them with the repo `remote` URL.
+
+| Token scope | Allowed commands |
+| --- | --- |
+| `read` | `git clone`, `git fetch`, `git pull` |
+| `write` | `git clone`, `git fetch`, `git pull`, `git push` |
+
+Use the exact repo `remote` value returned by the Workers binding or REST API:
+
+```sh
+export ARTIFACTS_REMOTE="<PASTE_REMOTE_FROM_CREATE_OR_GET_RESPONSE>"
+```
+
+Use a read token to clone:
+
+```sh
+git -c http.extraHeader="Authorization: Bearer <YOUR_READ_TOKEN>" clone "$ARTIFACTS_REMOTE" artifacts-clone
+```
+
+Use a write token to push:
+
+```sh
+git -c http.extraHeader="Authorization: Bearer <YOUR_WRITE_TOKEN>" push "$ARTIFACTS_REMOTE" HEAD:main
+```
+
+For more information on token handling and authenticated remotes, refer to [Git protocol](https://developers.cloudflare.com/artifacts/api/git-protocol/).
+
+Was this helpful?
+
+YesNo
+
+## On this page
+
+[![](https://developers.cloudflare.com/_astro/logo.te5VL_aD.svg)Docs](https://developers.cloudflare.com/)
+
+```json
+{"@context":"https://schema.org","@type":"TechArticle","@id":"https://developers.cloudflare.com/artifacts/guides/authentication/#page","headline":"Authentication","description":"Choose auth for bindings, API calls, and Git.","url":"https://developers.cloudflare.com/artifacts/guides/authentication/","inLanguage":"en","image":"https://developers.cloudflare.com/artifacts/guides/authentication/og.png?v=5e103971d5cf365b","dateModified":"2026-04-25","publisher":{"@type":"Organization","name":"Cloudflare","description":"One platform for your apps, agents, and workforce. Build, secure, and scale without managing infrastructure","url":"https://www.cloudflare.com/","sameAs":["https://github.com/cloudflare","https://www.linkedin.com/company/cloudflare","https://x.com/cloudflare"],"logo":{"@type":"ImageObject","url":"https://developers.cloudflare.com/logo.svg"},"address":{"@type":"PostalAddress","streetAddress":"101 Townsend St","addressLocality":"San Francisco","addressRegion":"CA","postalCode":"94107","addressCountry":"US"},"contactPoint":[{"@type":"ContactPoint","contactType":"Customer Support","url":"https://support.cloudflare.com/","availableLanguage":["English"]},{"@type":"ContactPoint","contactType":"Sales","url":"https://www.cloudflare.com/contact/","availableLanguage":["English"]}]},"isPartOf":{"@type":"WebSite","@id":"https://developers.cloudflare.com/#website","name":"Cloudflare Docs","url":"https://developers.cloudflare.com/"}}
+```
