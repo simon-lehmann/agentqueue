@@ -207,14 +207,41 @@ export class RepoCoordinator extends DurableObject<Env> {
 		const forkName = `${this.project}--${id}-a${attempt}`;
 		// Take the lease before any await so a concurrent wake() can't start it twice.
 		this.update(id, { status: "working", attempt, fork: null });
-		using main = await this.env.ARTIFACTS.get(this.meta("mainRepo")!);
-		const [head] = await main.log({ ref: "main", limit: 1 });
-		const fork = await main.fork(forkName, { defaultBranchOnly: true, description: t.intent.slice(0, 200) });
-		using forkRepo = await this.env.ARTIFACTS.get(forkName);
-		const token = await forkRepo.createToken("write", 7200);
-		this.update(id, { status: "working", attempt, fork: forkName, baseSha: head?.hash ?? null, headSha: null, changed: [], blockedBy: [] });
-		this.log(attempt > 1 ? "task.redo" : "task.started", id, { fork: forkName, base: head?.hash, attempt });
-		return { task: this.task(id), remote: fork.remote, token: token.plaintext };
+		try {
+			using main = await this.env.ARTIFACTS.get(this.meta("mainRepo")!);
+			const [head] = await main.log({ ref: "main", limit: 1 });
+			await main.fork(forkName, { defaultBranchOnly: true, description: t.intent.slice(0, 200) }).catch(async (e) => {
+				// A retry after a partial failure may find the fork already there.
+				if (!(await this.env.ARTIFACTS.list({ limit: 1000 })).repos.some((r) => r.name === forkName)) throw e;
+			});
+			using forkRepo = await this.ready(forkName);
+			const [info, token] = await Promise.all([forkRepo.info(), forkRepo.createToken("write", 7200)]);
+			this.update(id, { status: "working", attempt, fork: forkName, baseSha: head?.hash ?? null, headSha: null, changed: [], blockedBy: [] });
+			this.log(attempt > 1 ? "task.redo" : "task.started", id, { fork: forkName, base: head?.hash, attempt });
+			return { task: this.task(id), remote: info.remote, token: token.plaintext };
+		} catch (e) {
+			// Give the lease back in its previous state and retry from the alarm.
+			this.update(id, { status: t.status, attempt: t.attempt, fork: t.fork });
+			this.log("agent.note", id, { message: `fork for attempt ${attempt} failed, retrying: ${e instanceof Error ? e.message : e}` });
+			await this.ctx.storage.setAlarm(Date.now() + 2000);
+			return { task: this.task(id) };
+		}
+	}
+
+	// Forks are created asynchronously; get() throws until the repo is ready.
+	private async ready(name: string) {
+		for (let i = 0; ; i++) {
+			try {
+				return await this.env.ARTIFACTS.get(name);
+			} catch (e) {
+				if (i >= 20) throw e;
+				await new Promise((r) => setTimeout(r, 250));
+			}
+		}
+	}
+
+	async alarm() {
+		await this.wake();
 	}
 
 	// Re-issue credentials for a task's current fork (agents poll this while waiting).
@@ -314,8 +341,10 @@ export class RepoCoordinator extends DurableObject<Env> {
 		}
 	}
 
-	// Start waiting tasks whose blockers have all finished.
+	// Start waiting tasks whose blockers have all finished, and retry redos
+	// whose fork creation failed.
 	private async wake() {
+		for (const t of this.tasks(`status = 'evicted'`)) await this.start(t.id);
 		const live = new Set(this.tasks(`status IN ('working','reviewing','queued','waiting')`).map((t) => t.id));
 		for (const t of this.tasks(`status = 'waiting'`)) {
 			if (t.blockedBy.every((b) => !live.has(b))) await this.start(t.id);
@@ -325,6 +354,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 	// ---- read-only views (served from Artifacts, no clone) ------------------
 
 	async listFiles(): Promise<string[]> {
+		if (!this.meta("mainRepo")) return [];
 		using main = await this.env.ARTIFACTS.get(this.meta("mainRepo")!);
 		const [head] = await main.log({ ref: "main", limit: 1 });
 		if (!head) return [];
@@ -340,6 +370,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 	}
 
 	async commits(limit = 50) {
+		if (!this.meta("mainRepo")) return [];
 		using main = await this.env.ARTIFACTS.get(this.meta("mainRepo")!);
 		return main.log({ ref: "main", limit });
 	}

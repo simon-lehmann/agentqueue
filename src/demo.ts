@@ -67,4 +67,8 @@ export const DEMO_GOALS: { agent: string; goal: string }[] = [
 	{ agent: "finn", goal: "Add a clearCompleted() function to the store that deletes done todos and returns how many were removed." },
 	{ agent: "gus", goal: "Add permissive CORS headers to every response from the routes handler." },
 	{ agent: "hana", goal: "Add a count() function to the store returning {total, done, open}, and expose it as GET /todos/count." },
+	{ agent: "ivy", goal: "Create src/search.ts with a searchTodos(todos, query) function doing case-insensitive substring search on titles." },
+	{ agent: "jon", goal: "Create src/export.ts with toCsv(todos) that exports todos as CSV with a header row and proper quoting." },
+	{ agent: "kai", goal: "Create tests/format.test.ts with vitest tests for formatTodo." },
+	{ agent: "lea", goal: "Create a CHANGELOG.md following Keep a Changelog with an Unreleased section." },
 ];
