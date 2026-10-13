@@ -380,7 +380,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
   const landedInfo = new Map();
   const flashes = new Map(); // task id -> class
 
-  const laneOf = (t) => ({ waiting: "waiting", working: "working", evicted: "working", reviewing: "reviewing", queued: "queued", landed: "landed", abandoned: "landed" }[t.status] || "working");
+  const laneOf = (t) => ({ waiting: "waiting", working: "working", evicted: "working", reviewing: "reviewing", "needs-human": "reviewing", queued: "queued", landed: "landed", abandoned: "landed" }[t.status] || "working");
   const lastReview = new Map(); // task id -> latest task.reviewed data for its current attempt
 
   // ---- rendering: task cards with FLIP transitions between lanes ----
@@ -393,6 +393,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     if (isRedo) badges.push(`<span class="badge redo" title="Evicted on conflict and re-forked from new main">redo · a${t.attempt}</span>`);
     if (t.status === "queued" && landing.has(t.id)) badges.push(`<span class="badge landing"><span class="spin" style="width:8px;height:8px;border-width:1.5px;vertical-align:-1px"></span> landing</span>`);
     if (t.status === "abandoned") badges.push(`<span class="badge abandoned">abandoned</span>`);
+    if (t.status === "needs-human") badges.push(`<span class="badge abandoned" style="color:var(--amber)" title="Review budget spent; waiting for a human to approve or abandon">needs human</span>`);
     if (t.status === "landed" && t.landedSha) badges.push(`<span class="badge ff mono" style="font-size:10.5px">${short(t.landedSha)}</span>`);
 
     let meta = "";
@@ -417,7 +418,9 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
       meta += `<div class="row"><span class="k">conflict</span><span class="chips">${t.conflicts.map((p) => `<span class="chip conflict">${esc(p)}</span>`).join("")}</span></div>`;
     }
     let extra = "";
-    if (isRedo && t.feedback && t.status !== "landed" && t.status !== "abandoned") {
+    if (t.status === "needs-human" && t.feedback) {
+      extra += `<div class="review no"><b>Parked</b> <span>${esc(t.feedback.replace(/^Needs a human:\s*/, ""))}</span></div>`;
+    } else if (isRedo && t.feedback && t.status !== "landed" && t.status !== "abandoned") {
       extra += `<div class="feedback"><b>Why attempt ${t.attempt}:</b> <span>${esc(t.feedback)}</span></div>`;
     }
     const rv = lastReview.get(t.id);
@@ -485,7 +488,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
           if (!launchEl) {
             launchEl = document.createElement("div");
             launchEl.className = "empty launch";
-            launchEl.innerHTML = `<button class="btn" data-launch>Launch demo swarm</button><p>Seeds this project's main repo and starts 8 Workers AI agents on it.</p>`;
+            launchEl.innerHTML = `<button class="btn" data-launch>Launch demo swarm</button><p>Seeds this project's main repo and starts 12 Workers AI agents on it.</p>`;
           }
           e = launchEl;
         } else {
@@ -538,7 +541,8 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
       list = commits.map((c) => {
         const m = /Agent-Task:\s*(\S+)/.exec(c.message || "");
         const t = m && byId.get(m[1]);
-        return { hash: c.hash, msg: (c.message || "").split("\n")[0], agent: c.author?.name || t?.agent || "", task: m?.[1], ts: (c.committedAt || 0) * 1000 };
+        const redos = (c.message || "").match(/^Redo-Reason:/gm)?.length || 0;
+        return { hash: c.hash, msg: (c.message || "").split("\n")[0], full: c.message || "", redos, agent: c.author?.name || t?.agent || "", task: m?.[1], ts: (c.committedAt || 0) * 1000 };
       });
     } else {
       list = state.tasks.filter((t) => t.status === "landed" && t.landedSha)
@@ -551,10 +555,10 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
       const bot = !c.task;
       const col = bot ? "var(--faint)" : agentColor(c.agent);
       const isNew = !firstRender && !seenCommits.has(c.hash);
-      return `<div class="commit${isNew ? " enter" : ""}" style="--agent:${col}">
+      return `<div class="commit${isNew ? " enter" : ""}" style="--agent:${col}"${c.full ? ` title="${esc(c.full)}"` : ""}>
         <div class="node"><i></i></div>
         <div><div class="msg">${esc(c.msg)}${i === 0 ? `<span class="headtag">HEAD</span>` : ""}</div>
-        <div class="sub"><span class="sha">${short(c.hash)}</span><span>${esc(c.agent)}</span>${c.task ? `<span class="mono" style="font-size:11px">Agent-Task: ${esc(c.task)}</span>` : ""}<span style="margin-left:auto">${c.ts ? ago(c.ts) : ""}</span></div></div>
+        <div class="sub"><span class="sha">${short(c.hash)}</span><span>${esc(c.agent)}</span>${c.task ? `<span class="mono" style="font-size:11px">Agent-Task: ${esc(c.task)}</span>` : ""}${c.redos ? `<span class="badge redo" title="Redo-Reason trailers on this commit">redo ×${c.redos}</span>` : ""}<span style="margin-left:auto">${c.ts ? ago(c.ts) : ""}</span></div></div>
       </div>`;
     }).join("");
     for (const c of list) seenCommits.add(c.hash);
@@ -595,12 +599,14 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     "task.redo": ["redo", (e, a) => `${a} redoes its intent on main @ <code>${short(e.data.base)}</code> (attempt ${e.data.attempt})`],
     "task.reviewing": ["reviewing", (e, a) => `${a} submitted ${files(e.data.changed?.length)} for review${outside(e)}`],
     "task.reviewed": ["reviewed", (e, a) => e.data.approve
-      ? `<span class="verdict ok">Reviewer approved</span> ${a}${e.data.comments ? `<div class="quote">${esc(e.data.comments)}</div>` : ""}`
+      ? `<span class="verdict ok">Reviewer approved</span> ${a}${e.data.chunks > 1 ? ` <span style="color:var(--muted)">(${e.data.chunks} parts in parallel)</span>` : ""}${e.data.comments ? `<div class="quote">${esc(e.data.comments)}</div>` : ""}`
       : `<span class="verdict no">Changes requested</span> on ${a}${e.data.comments ? `<div class="quote">${esc(e.data.comments)}</div>` : ""}`],
-    "task.queued": ["queued", (e, a) => `${a} entered the merge queue${e.data.overridden ? ` <span style="color:var(--amber)">(retry budget spent)</span>` : ""}${e.data.changed ? ` · ${files(e.data.changed.length)}` : ""}${outside(e)}`],
+    "task.queued": ["queued", (e, a) => `${a} entered the merge queue${e.data.approvedBy === "human" ? ` <span style="color:var(--amber)">(approved by a human)</span>` : ""}${e.data.changed ? ` · ${files(e.data.changed.length)}` : ""}${outside(e)}`],
     "task.landing": ["landing", (e, a) => `Merging ${a} onto main`],
     "task.landed": ["landed", (e, a) => `${a} landed <code>${short(e.data.sha)}</code>`],
     "task.evicted": ["evicted", (e, a) => `${a} evicted: conflict on ${(e.data.conflicts || []).map((c) => `<code>${esc(c)}</code>`).join(", ") || "merge"}`],
+    "task.trespass": ["evicted", (e, a) => `${a} sent back: edited ${(e.data.paths || []).map((c) => `<code>${esc(c)}</code>`).join(", ")} under another agent's lease`],
+    "task.parked": ["waiting", (e, a) => `${a} parked for a human<div class="quote">${esc(String(e.data.reason || ""))}</div>`],
     "task.abandoned": ["abandoned", (e, a) => `${a} abandoned the task`],
     "agent.note": ["note", (e, a) => `<span style="color:var(--muted)">${e.task ? a + ": " : ""}${esc(String(e.data.message || "").replace(/^agent \S+:\s*/, "").replace(/(.)\1{5,}/g, "$1$1$1…").slice(0, 160))}</span>`],
     "queue.error": ["error", (e) => `Queue error: ${esc(String(e.data.error || "").slice(0, 120))}`],
@@ -641,7 +647,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
       }
       if (done.has(e.task)) continue;
       if (e.type === "task.landing") landing.add(e.task);
-      if (["task.landing", "task.landed", "task.evicted", "task.queued", "task.reviewing", "task.started", "task.redo"].includes(e.type)) done.add(e.task);
+      if (["task.landing", "task.landed", "task.evicted", "task.trespass", "task.queued", "task.reviewing", "task.started", "task.redo"].includes(e.type)) done.add(e.task);
     }
   }
 
@@ -698,7 +704,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     ws.onmessage = (m) => {
       try {
         const e = JSON.parse(m.data);
-        if (e.type === "task.evicted") flashes.set(e.task, "shake");
+        if (e.type === "task.evicted" || e.type === "task.trespass") flashes.set(e.task, "shake");
         if (e.type === "task.landed") flashes.set(e.task, "hl");
       } catch {}
       soon();

@@ -1,9 +1,14 @@
 import { DurableObject } from "cloudflare:workers";
 import { changedPaths, intersect } from "./diff";
 import { Mirror } from "./mirror";
+import { REVIEW_MODEL, reviewChange, unifiedDiff, type Verdict } from "./review";
 
-export type Status = "waiting" | "working" | "reviewing" | "queued" | "landed" | "evicted" | "abandoned";
-const ACTIVE: Status[] = ["working", "reviewing", "queued"]; // statuses that hold a lease
+export type Status = "waiting" | "working" | "reviewing" | "queued" | "landed" | "evicted" | "abandoned" | "needs-human";
+// Statuses that hold a lease. An evicted task is between attempts and keeps
+// its lease so nothing waiting on it starts early.
+const ACTIVE: Status[] = ["working", "reviewing", "queued", "evicted"];
+const LIVE: Status[] = [...ACTIVE, "waiting"];
+const inList = (xs: Status[]) => xs.map((s) => `'${s}'`).join(",");
 
 export interface Task {
 	id: string;
@@ -35,32 +40,6 @@ type Row = Record<string, SqlStorageValue>;
 
 const json = (v: unknown) => JSON.stringify(v);
 const MAX_REVIEWS = 2;
-const REVIEW_MODEL = "@cf/openai/gpt-oss-120b";
-
-async function reviewDiff(env: Env, intent: string, claims: string[], undeclared: string[], diff: string) {
-	const out: any = await env.AI.run(REVIEW_MODEL as any, {
-		messages: [
-			{
-				role: "system",
-				content:
-					"You review changes made by coding agents before they merge. Approve if the change correctly and completely implements the intent without unrelated edits or obvious bugs. Be pragmatic: style nits are not grounds for rejection. Reply with JSON only.",
-			},
-			{
-				role: "user",
-				content: `Intent: ${intent}\nClaimed files: ${claims.join(", ")}\n${undeclared.length ? `Edited without claiming: ${undeclared.join(", ")}\n` : ""}\n${diff}\n\nReply as {"approve": true|false, "comments": "<one or two sentences>"}`,
-			},
-		],
-		max_tokens: 3000,
-		reasoning_effort: "low",
-	} as any);
-	const text: string = out?.choices?.[0]?.message?.content ?? out?.response ?? "";
-	try {
-		const r = JSON.parse(text.match(/\{[\s\S]*\}/)![0]);
-		return { approve: Boolean(r.approve), comments: String(r.comments ?? "").slice(0, 500) };
-	} catch {
-		return { approve: true, comments: "reviewer gave no verdict; approved by default" };
-	}
-}
 const newId = () => Math.random().toString(36).slice(2, 8);
 
 // One coordinator per project. It is the only writer of the project's main
@@ -186,7 +165,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 	// forked from main only after its blockers land — the conflict never happens.
 	async claim(input: { intent: string; claims: string[]; agent: string }): Promise<Assignment> {
 		const id = newId();
-		const blockers = this.tasks(`status IN ('working','reviewing','queued','waiting')`).filter((t) => intersect(input.claims, t.claims).length);
+		const blockers = this.tasks(`status IN (${inList(LIVE)})`).filter((t) => intersect(input.claims, t.claims).length);
 		const now = Date.now();
 		this.sql.exec(
 			`INSERT INTO tasks (id, intent, agent, claims, status, attempt, changed, blocked_by, conflicts, seq, created_at, updated_at)
@@ -212,12 +191,18 @@ export class RepoCoordinator extends DurableObject<Env> {
 			const [head] = await main.log({ ref: "main", limit: 1 });
 			await main.fork(forkName, { defaultBranchOnly: true, description: t.intent.slice(0, 200) }).catch(async (e) => {
 				// A retry after a partial failure may find the fork already there.
-				if (!(await this.env.ARTIFACTS.list({ limit: 1000 })).repos.some((r) => r.name === forkName)) throw e;
+				// Look it up by name rather than listing the namespace, which forks fill up.
+				try {
+					using _existing = await this.ready(forkName);
+				} catch {
+					throw e;
+				}
 			});
 			using forkRepo = await this.ready(forkName);
 			const [info, token] = await Promise.all([forkRepo.info(), forkRepo.createToken("write", 7200)]);
 			this.update(id, { status: "working", attempt, fork: forkName, baseSha: head?.hash ?? null, headSha: null, changed: [], blockedBy: [] });
 			this.log(attempt > 1 ? "task.redo" : "task.started", id, { fork: forkName, base: head?.hash, attempt });
+			if (t.fork && t.fork !== forkName) this.dropFork(t.fork);
 			return { task: this.task(id), remote: info.remote, token: token.plaintext };
 		} catch (e) {
 			// Give the lease back in its previous state and retry from the alarm.
@@ -238,6 +223,11 @@ export class RepoCoordinator extends DurableObject<Env> {
 				await new Promise((r) => setTimeout(r, 250));
 			}
 		}
+	}
+
+	// Forks are throwaway: one per attempt, deleted once the attempt is over.
+	private dropFork(name: string) {
+		this.ctx.waitUntil(this.env.ARTIFACTS.delete(name).then(() => {}, () => {}));
 	}
 
 	async alarm() {
@@ -261,16 +251,48 @@ export class RepoCoordinator extends DurableObject<Env> {
 		if (!head || head.hash === t.baseSha) throw new Error(`task ${id}: no commits on fork`);
 		const changed = t.baseSha ? await changedPaths(repo, t.baseSha, head.hash) : [];
 		const undeclared = changed.filter((p) => !intersect([p], t.claims).length);
-		this.update(id, { status: "reviewing", headSha: head.hash, changed });
+		this.update(id, { headSha: head.hash, changed });
+
+		// Leases are enforced, not advisory: editing a file another live task
+		// holds sends the change back before it costs a review.
+		const trespass = this.tasks(`status IN (${inList(ACTIVE)}) AND id != ?`, id)
+			.map((o) => ({ task: o, paths: intersect(undeclared, o.claims) }))
+			.filter((x) => x.paths.length);
+		if (trespass.length) {
+			const paths = [...new Set(trespass.flatMap((x) => x.paths))];
+			const holders = trespass.map((x) => `${x.task.agent} (#${x.task.id})`).join(", ");
+			this.update(id, {
+				status: "evicted",
+				conflicts: paths,
+				feedback: `You edited ${paths.join(", ")}, which you did not claim and ${holders} currently holds. Redo the intent touching only your claimed files.`,
+			});
+			this.log("task.trespass", id, { paths, holders: trespass.map((x) => x.task.id) });
+			await this.start(id);
+			return this.task(id);
+		}
+
+		this.update(id, { status: "reviewing" });
 		this.log("task.reviewing", id, { head: head.hash, changed, undeclared });
 		this.ctx.waitUntil(this.review(id, undeclared).catch((e) => this.log("queue.error", id, { error: String(e) })));
 		return this.task(id);
 	}
 
 	async abandon(id: string) {
+		const t = this.task(id);
 		this.update(id, { status: "abandoned" });
 		this.log("task.abandoned", id, {});
+		if (t.fork) this.dropFork(t.fork);
 		await this.wake();
+		return this.task(id);
+	}
+
+	// A human overrides the reviewer for a parked task and sends it to the queue.
+	async approve(id: string) {
+		const t = this.task(id);
+		if (t.status !== "needs-human") throw new Error(`task ${id} is ${t.status}, not waiting for a human`);
+		this.update(id, { status: "queued", feedback: null });
+		this.log("task.queued", id, { changed: t.changed, approvedBy: "human" });
+		this.kick();
 		return this.task(id);
 	}
 
@@ -281,19 +303,30 @@ export class RepoCoordinator extends DurableObject<Env> {
 	// a stubborn reviewer from looping forever.
 	private async review(id: string, undeclared: string[]) {
 		const t = this.task(id);
-		using repo = await this.env.ARTIFACTS.get(t.fork!);
-		const text = async (ref: string, path: string) => (await repo.readFile({ ref, path }))?.text() ?? "(absent)";
-		const diff = (
-			await Promise.all(t.changed.map(async (p) => `### ${p}\n--- before\n${await text(t.baseSha!, p)}\n--- after\n${await text(t.headSha!, p)}`))
-		).join("\n\n");
-		const verdict = await reviewDiff(this.env, t.intent, t.claims, undeclared, diff);
+		let verdict: Verdict;
+		try {
+			using repo = await this.env.ARTIFACTS.get(t.fork!);
+			const text = async (ref: string, path: string) => (await repo.readFile({ ref, path }))?.text() ?? null;
+			const patches = await Promise.all(t.changed.map(async (p) => unifiedDiff(p, await text(t.baseSha!, p), await text(t.headSha!, p))));
+			verdict = await reviewChange(this.env, t.intent, t.claims, undeclared, patches);
+		} catch (e) {
+			// Fail closed but never wedge: a broken review parks the task and frees its lease.
+			verdict = { approve: null, comments: `review failed: ${e instanceof Error ? e.message : e}`.slice(0, 300), chunks: 0 };
+		}
 		const reviews = t.reviews + 1;
 		if (this.task(id).status !== "reviewing") return; // abandoned meanwhile
 		this.log("task.reviewed", id, { ...verdict, round: reviews });
-		if (verdict.approve || reviews >= MAX_REVIEWS) {
+		if (verdict.approve) {
 			this.update(id, { status: "queued", reviews });
-			this.log("task.queued", id, { changed: t.changed, overridden: !verdict.approve });
+			this.log("task.queued", id, { changed: t.changed });
 			this.kick();
+		} else if (verdict.approve === null || reviews >= MAX_REVIEWS) {
+			// Out of review budget (or no usable verdict): park it for a human and
+			// release the lease. The fork stays so a human can inspect or approve it.
+			const why = verdict.approve === null ? verdict.comments : `still rejected after ${reviews} rounds: ${verdict.comments}`;
+			this.update(id, { status: "needs-human", reviews, feedback: `Needs a human: ${why}` });
+			this.log("task.parked", id, { reason: why });
+			await this.wake();
 		} else {
 			this.update(id, { status: "evicted", reviews, feedback: `Reviewer requested changes: ${verdict.comments}` });
 			await this.start(id);
@@ -322,11 +355,12 @@ export class RepoCoordinator extends DurableObject<Env> {
 				remote: info.remote,
 				token: token.plaintext,
 				author: next.agent,
-				message: `${next.intent}\n\nAgent-Task: ${next.id}\nAgent: ${next.agent}\nAttempt: ${next.attempt}\nClaims: ${next.claims.join(", ")}`,
+				message: `${next.intent}\n\n${this.trailers(next).join("\n")}`,
 			});
 			if (res.ok) {
 				this.update(next.id, { status: "landed", landedSha: res.sha });
 				this.log("task.landed", next.id, { sha: res.sha, fastForward: res.fastForward, changed: next.changed });
+				this.dropFork(next.fork!);
 			} else {
 				this.update(next.id, {
 					status: "evicted",
@@ -341,11 +375,49 @@ export class RepoCoordinator extends DurableObject<Env> {
 		}
 	}
 
+	// The landed commit carries the task's whole story as git trailers, so
+	// `git log` on main explains why each change looks the way it does:
+	// who asked for what, which files were leased, every redo and its reason,
+	// and who reviewed it. Readable with `git log --format=%(trailers)`.
+	private trailers(t: Task): string[] {
+		const one = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+		const events = this.sql
+			.exec(`SELECT type, data FROM events WHERE task = ? AND type IN ('task.waiting','task.reviewed','task.evicted','task.trespass','task.redo','task.queued') ORDER BY id`, t.id)
+			.toArray()
+			.map((e) => ({ type: e.type as string, data: JSON.parse(e.data as string) }));
+		const name = (id: string) => this.tasks("id = ?", id)[0]?.agent ?? id;
+		const out = [`Agent-Task: ${t.id}`, `Agent: ${t.agent}`, `Claims: ${t.claims.join(", ")}`];
+		let reason = "";
+		let review: any = null;
+		let human = false;
+		for (const e of events) {
+			if (e.type === "task.waiting") out.push(`Waited-For: ${e.data.blockedBy.map((b: string) => `${name(b)} (#${b})`).join(", ")}`);
+			if (e.type === "task.evicted") reason = `merge conflict on ${e.data.conflicts?.join(", ") || "overlapping lines"}`;
+			if (e.type === "task.trespass") reason = `edited ${e.data.paths.join(", ")} under another agent's lease`;
+			if (e.type === "task.reviewed") {
+				review = e.data;
+				if (e.data.approve === false) reason = `review: ${one(e.data.comments)}`;
+			}
+			if (e.type === "task.redo" && reason) {
+				out.push(`Redo-Reason: attempt ${e.data.attempt}: ${reason}`);
+				reason = "";
+			}
+			if (e.type === "task.queued" && e.data.approvedBy === "human") human = true;
+		}
+		out.push(`Attempt: ${t.attempt}`);
+		if (review) {
+			out.push(`Reviewed-by: ${REVIEW_MODEL.replace("@cf/", "workers-ai/")}${review.chunks > 1 ? ` (${review.chunks} chunks)` : ""}`);
+			out.push(`Review: ${review.approve === true ? "approved" : review.approve === false ? "changes requested" : "no verdict"}: ${one(review.comments)}`);
+		}
+		if (human) out.push("Approved-by: human (review override)");
+		return out;
+	}
+
 	// Start waiting tasks whose blockers have all finished, and retry redos
 	// whose fork creation failed.
 	private async wake() {
 		for (const t of this.tasks(`status = 'evicted'`)) await this.start(t.id);
-		const live = new Set(this.tasks(`status IN ('working','reviewing','queued','waiting')`).map((t) => t.id));
+		const live = new Set(this.tasks(`status IN (${inList(LIVE)})`).map((t) => t.id));
 		for (const t of this.tasks(`status = 'waiting'`)) {
 			if (t.blockedBy.every((b) => !live.has(b))) await this.start(t.id);
 		}
@@ -373,6 +445,16 @@ export class RepoCoordinator extends DurableObject<Env> {
 		if (!this.meta("mainRepo")) return [];
 		using main = await this.env.ARTIFACTS.get(this.meta("mainRepo")!);
 		return main.log({ ref: "main", limit });
+	}
+
+	// Demo budget: one coordinator instance doubles as a per-day counter so the
+	// public one-click demo can't run up an unbounded Workers AI bill.
+	async spendDemo(max: number) {
+		const k = `demo:${new Date().toISOString().slice(0, 10)}`;
+		const n = Number(this.meta(k) ?? 0);
+		if (n >= max) return false;
+		this.setMeta(k, String(n + 1));
+		return true;
 	}
 
 	async note(task: string | null, message: string) {
@@ -405,7 +487,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 			project: this.meta("project"),
 			mainRemote: this.meta("mainRemote"),
 			tasks: this.tasks(),
-			leases: this.tasks(`status IN (${ACTIVE.map((s) => `'${s}'`).join(",")})`).map((t) => ({ task: t.id, claims: t.claims })),
+			leases: this.tasks(`status IN (${inList(ACTIVE)})`).map((t) => ({ task: t.id, claims: t.claims })),
 			events,
 		};
 	}

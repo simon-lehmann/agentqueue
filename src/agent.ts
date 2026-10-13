@@ -59,7 +59,7 @@ export class SwarmAgent extends DurableObject<Env> {
 			return;
 		}
 		const a = await coord.assignment(s.taskId);
-		if (a.task.status === "landed" || a.task.status === "abandoned") {
+		if (a.task.status === "landed" || a.task.status === "abandoned" || a.task.status === "needs-human") {
 			s.finished = true;
 			await this.save(s);
 		} else if (a.task.status === "working" && a.remote && a.task.attempt > s.doneAttempt) {

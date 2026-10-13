@@ -39,6 +39,9 @@ export default {
 				if (!project.startsWith("demo-")) return Response.json({ error: "demo projects must be named demo-*" }, { status: 400 });
 				if ((await coord.state()).tasks.length) return Response.json({ error: "project already has tasks" }, { status: 409 });
 				if (!(await env.DEMO_LIMIT.limit({ key: "global" })).success) return Response.json({ error: "demo busy, try again in a minute" }, { status: 429 });
+				// "~" can't appear in a project name, so this instance never collides with a real project.
+				const budget = env.COORDINATOR.get(env.COORDINATOR.idFromName("~demo-budget"));
+				if (!(await budget.spendDemo(Number(env.DEMO_DAILY_LIMIT) || 40))) return Response.json({ error: "today's demo budget is used up; run it locally or try tomorrow" }, { status: 429 });
 				await coord.init(project, { seed: DEMO_SEED });
 				return Response.json(await coord.swarm(DEMO_GOALS));
 			}
@@ -46,10 +49,11 @@ export default {
 				if (!body.intent || !Array.isArray(body.claims)) return Response.json({ error: "intent and claims[] required" }, { status: 400 });
 				return Response.json(await coord.claim({ intent: body.intent, claims: body.claims, agent: body.agent ?? "anonymous" }));
 			}
-			const t = rest.match(/^\/tasks\/([a-z0-9]+)(\/submit|\/abandon)?$/);
+			const t = rest.match(/^\/tasks\/([a-z0-9]+)(\/submit|\/abandon|\/approve)?$/);
 			if (t && req.method === "GET" && !t[2]) return Response.json(await coord.assignment(t[1]));
 			if (t && req.method === "POST" && t[2] === "/submit") return Response.json(await coord.submit(t[1]));
 			if (t && req.method === "POST" && t[2] === "/abandon") return Response.json(await coord.abandon(t[1]));
+			if (t && req.method === "POST" && t[2] === "/approve") return Response.json(await coord.approve(t[1]));
 		} catch (e) {
 			return Response.json({ error: String(e instanceof Error ? e.message : e) }, { status: 409 });
 		}

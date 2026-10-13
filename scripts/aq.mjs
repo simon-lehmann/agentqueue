@@ -4,6 +4,7 @@
 //   aq claim -p <project> -a <agent> -m "<intent>" <path>...   → clones your fork into ./aq-<task>
 //   aq submit [dir]                                            → pushes, submits, waits for the verdict
 //   aq status [dir]
+//   aq approve -p <project> <task>                              → land a task parked for a human
 //
 // AQ_URL selects the coordinator (default http://localhost:8799).
 import { execFileSync } from "node:child_process";
@@ -84,14 +85,26 @@ if (cmd === "claim") {
 	git(dir, a.token, "push", "-q", "origin", "HEAD:main");
 	await api(meta.project, "POST", `/tasks/${meta.task}/submit`);
 	console.log("submitted; reviewing and queueing...");
-	a = await until(meta.project, meta.task, (x) => x.task.status === "landed" || (live(x) && x.task.attempt > meta.attempt));
+	const settled = (x) => ["landed", "needs-human", "abandoned"].includes(x.task.status);
+	a = await until(meta.project, meta.task, (x) => settled(x) || (live(x) && x.task.attempt > meta.attempt));
 	if (a.task.status === "landed") {
 		console.log(`landed on main as ${a.task.landedSha.slice(0, 7)}`);
+	} else if (a.task.status === "needs-human") {
+		console.log(`${a.task.feedback}\nparked; a human can land it with: aq approve -p ${meta.project} ${meta.task}`);
+		process.exit(3);
+	} else if (a.task.status === "abandoned") {
+		console.log("task was abandoned");
+		process.exit(1);
 	} else {
 		console.log(`sent back for another attempt.`);
 		checkout(dir, a, meta.project);
 		process.exit(2);
 	}
+} else if (cmd === "approve") {
+	const f = flags(rest);
+	if (!f.p || !f._[0]) throw new Error("usage: aq approve -p <project> <task>");
+	const t = await api(f.p, "POST", `/tasks/${f._[0]}/approve`);
+	console.log(`task ${t.id} approved by a human; queued to land`);
 } else {
-	console.log(readFileSync(new URL(import.meta.url)).toString().split("\n").slice(1, 9).join("\n").replace(/^\/\/ ?/gm, ""));
+	console.log(readFileSync(new URL(import.meta.url)).toString().split("\n").slice(1, 10).join("\n").replace(/^\/\/ ?/gm, ""));
 }

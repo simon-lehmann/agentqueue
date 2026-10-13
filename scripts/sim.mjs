@@ -96,6 +96,23 @@ console.log(`dave sent back (${d2.task.feedback}); redo attempt ${d2.task.attemp
 await work(d2, replace("README.md", "# demo", "# Acme"));
 await waitFor(d.task.id, (t) => t.status === "landed", "land");
 
+// 4. Lease enforcement: frank claims README but also edits billing.ts while
+//    gina holds it. He is sent back at submit without spending a review.
+const g = await api("POST", "/tasks", { agent: "gina", intent: "Add a tax(n) helper to billing returning n * 0.2", claims: ["src/billing.ts"] });
+const f = await api("POST", "/tasks", { agent: "frank", intent: "Add a Billing section to the README", claims: ["README.md"] });
+const fs1 = await work(f, (dir) => {
+	append("README.md", "\n## Billing\n")(dir);
+	append("src/billing.ts", "export const fee = 1;")(dir);
+});
+if (!/holds/.test(fs1.feedback ?? "")) throw new Error(`frank should be sent back for trespassing: ${JSON.stringify(fs1)}`);
+console.log(`frank sent back for editing gina's lease (${fs1.feedback})`);
+await work(g, append("src/billing.ts", "export const tax = (n: number) => n * 0.2;"));
+const f2 = await waitFor(f.task.id, (t) => t.status === "working" && t.attempt === 2, "be re-forked");
+await work(f2, append("README.md", "\n## Billing\n"));
+await waitFor(g.task.id, (t) => t.status === "landed", "land");
+await waitFor(f.task.id, (t) => t.status === "landed", "land");
+console.log("gina + frank landed");
+
 const state = await api("GET", "/");
 console.log("final:", state.tasks.map((t) => `${t.agent}:${t.status}@a${t.attempt}`).join(" "));
 console.log(`main: ${state.mainRemote}`);

@@ -4,11 +4,11 @@
 
 Pull requests were designed for a handful of humans who rebase reluctantly. Agents are the opposite: there are many of them, they are fast and cheap, and they don't mind redoing work. In one study of 33,596 agent-authored PRs, 41.7% of cross-agent PR pairs conflicted when replayed ([arXiv 2607.04697](https://arxiv.org/abs/2607.04697)). agentqueue borrows what large monorepos already do to keep hundreds of contributors from colliding (Bors, Zuul, Uber's SubmitQueue, Meta's pushrebase) and rebuilds it around agents:
 
-1. **Declare before you write.** An agent states its *intent* and the files it will touch. Claims that overlap a live lease wait. They are forked from main only after the blocker lands, so most conflicts never happen.
+1. **Declare before you write.** An agent states its *intent* and the files it will touch. Claims that overlap a live lease wait. They are forked from main only after the blocker lands, so most conflicts never happen. Leases are enforced: a submit that edits a file someone else holds is sent straight back.
 2. **Every task gets its own repo.** Each attempt is an Artifacts fork of main with a short-lived, repo-scoped token. Agents use plain `git`.
 3. **One writer for main.** A Durable Object per project is the only thing that moves main. It squash-lands each task as one linear commit carrying `Agent-Task`, `Agent` and `Claims` trailers.
 4. **Review against intent.** Before queueing, a reviewer model compares the diff with the stated intent and the claims. It sends back incomplete work and edits outside the claimed files.
-5. **Redo, don't resolve.** When review rejects a change, or it still conflicts at merge time, the task is re-forked from the new main. The reason goes back to the agent as feedback and the agent re-executes its intent. Hand-merging is for humans; agents just rerun. Review rounds are capped so retries can't loop forever.
+5. **Redo, don't resolve.** When review rejects a change, or it still conflicts at merge time, the task is re-forked from the new main. The reason goes back to the agent as feedback and the agent re-executes its intent. Hand-merging is for humans; agents just rerun. Review rounds are capped so retries can't loop forever. A change that runs out of rounds is parked for a human instead of landing anyway.
 
 ## How it uses Cloudflare
 
@@ -40,7 +40,7 @@ Artifacts and Workers AI have no local emulator, so `wrangler dev` uses the real
 **Watch a swarm:** open `http://localhost:8799/` and press *Launch demo swarm*. Or:
 
 ```sh
-curl -X POST localhost:8799/p/demo-1/demo     # seeds a todo service, launches 8 Workers AI agents
+curl -X POST localhost:8799/p/demo-1/demo     # seeds a todo service, launches 12 Workers AI agents
 open "http://localhost:8799/?project=demo-1"
 ```
 
@@ -49,6 +49,14 @@ open "http://localhost:8799/?project=demo-1"
 ```sh
 npm run sim
 ```
+
+**Large changes** (one agent rewrites 10,000 lines across 100 files while small agents hold leases on some of them):
+
+```sh
+npm run stress                                 # or: node scripts/stress.mjs <url> <files> <linesPerFile>
+```
+
+The reviewer reads unified diffs, not whole files. A change too big for one model call is split into chunks that are reviewed in parallel against the same intent, and every chunk must pass. 10k changed lines review as 8 chunks in ~18s; 30k as 22 chunks in ~35s. Above about 33k lines the task is parked for a human instead. A failed review parks the task and frees its lease, so a huge change can never wedge the queue.
 
 **Bring your own agent:**
 
@@ -75,11 +83,14 @@ npm run deploy
 | `GET /p/:project/tasks/:id` | task + fresh fork credentials when working |
 | `POST /p/:project/tasks/:id/submit` | diff fork → review → queue → land |
 | `POST /p/:project/tasks/:id/abandon` | release the lease |
+| `POST /p/:project/tasks/:id/approve` | human override: land a task parked as `needs-human` |
 | `POST /p/:project/swarm` `{goals:[{agent, goal}]}` | launch Workers AI agents |
 | `POST /p/:project/demo` | seed + launch the demo swarm (`demo-*` projects, rate limited) |
 | `GET /p/:project/` · `/commits` · `/files` · `/ws` | state, main history, tree, live events |
 
-Write routes and `GET /tasks/:id` (which hands out a token) require `Authorization: Bearer $AQ_API_KEY` when the secret is set.
+Write routes and `GET /tasks/:id` (which hands out a token) require `Authorization: Bearer $AQ_API_KEY` when the secret is set. The public demo route is capped at `DEMO_DAILY_LIMIT` runs a day (`wrangler.jsonc`).
+
+Each attempt's fork is deleted once it lands, is redone or is abandoned. Parked tasks keep theirs for inspection.
 
 ## Layout
 
@@ -87,10 +98,12 @@ Write routes and `GET /tasks/:id` (which hands out a token) require `Authorizati
 src/coordinator.ts  RepoCoordinator DO: leases, review gate, merge queue, events
 src/mirror.ts       in-memory git mirror: fetch, three-way merge, squash-land, push
 src/diff.ts         changed paths between commits via Artifacts readTree
+src/review.ts       intent-vs-diff reviewer; chunks large diffs and reviews them in parallel
 src/agent.ts        SwarmAgent DO: Workers AI coding agent
 src/demo.ts         demo repo + goals
 scripts/aq.mjs      CLI for external agents
 scripts/sim.mjs     scripted end-to-end scenario
+scripts/stress.mjs  10k-line refactor racing small agents
 docs/PLAN.md        design notes; docs/research/ holds Artifacts docs + contest terms
 ```
 

@@ -9,13 +9,15 @@
     "deploy": "wrangler deploy",
     "types": "wrangler types",
     "typecheck": "tsc --noEmit",
-    "sim": "node scripts/sim.mjs"
+    "sim": "node scripts/sim.mjs",
+    "stress": "node scripts/stress.mjs"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
     "wrangler": "^4.149.0"
   },
   "dependencies": {
+    "diff": "^8.0.4",
     "isomorphic-git": "^1.44.2"
   },
   "bin": {
