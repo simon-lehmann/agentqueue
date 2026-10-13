@@ -11,6 +11,7 @@ export default {
 	async fetch(req, env): Promise<Response> {
 		const url = new URL(req.url);
 		if (url.pathname === "/health") return Response.json({ ok: true });
+		if (url.pathname === "/repos") return Response.json(await env.ARTIFACTS.list({ limit: 50 }));
 		const m = url.pathname.match(/^\/repos\/([\w.-]{2,63})\/status$/);
 		if (m) {
 			const stub = env.COORDINATOR.get(env.COORDINATOR.idFromName(m[1]));
