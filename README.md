@@ -7,6 +7,7 @@ Entry for Cloudflare's "Build the next GitHub" challenge. See [docs/PLAN.md](doc
 
 ```sh
 npm install
-npx wrangler login   # Workers Paid plan required for Artifacts
+cp .env.example .env   # fill in tokens; Artifacts needs the Workers Paid plan
+set -a; . ./.env; set +a
 npm run dev
 ```
