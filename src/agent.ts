@@ -77,7 +77,7 @@ export class SwarmAgent extends DurableObject<Env> {
 		const context: Record<string, string> = {};
 		for (const p of paths) context[p] = await read(p);
 
-		const edits = await this.edit(a.task.intent, a.task.claims, context, a.task.attempt > 1 ? a.task.conflicts : []);
+		const edits = await this.edit(a.task.intent, a.task.claims, context, a.task.attempt > 1 ? a.task.feedback : null);
 		for (const [p, body] of Object.entries(edits)) {
 			await fs.promises.writeFile(`${dir}/${p}`, body);
 			await git.add({ fs, dir, filepath: p });
@@ -116,11 +116,9 @@ export class SwarmAgent extends DurableObject<Env> {
 		return { intent: String(r.intent || goal).slice(0, 200), claims: claims.length ? claims : files.slice(0, 1) };
 	}
 
-	private async edit(intent: string, claims: string[], files: Record<string, string>, conflicts: string[]): Promise<Record<string, string>> {
+	private async edit(intent: string, claims: string[], files: Record<string, string>, feedback: string | null): Promise<Record<string, string>> {
 		const listing = Object.entries(files).map(([p, b]) => `--- ${p}\n${b}`).join("\n");
-		const redo = conflicts.length
-			? `\nYour previous attempt conflicted with another agent's change on ${conflicts.join(", ")}. The files below are the new main; redo your intent on top of them and preserve their changes.\n`
-			: "";
+		const redo = feedback ? `\nThis is a retry. ${feedback} The files below are the current main.\n` : "";
 		const r = await this.ask(
 			"You are a careful coding agent. Make the smallest correct change that achieves the intent. Only modify the files you claimed. Return complete new file contents. Reply with JSON only.",
 			`Intent: ${intent}\nClaimed files: ${claims.join(", ")}${redo}\nCurrent files:\n${listing}\n\nReply as {"files": {"<path>": "<full new content>"}}.`,
