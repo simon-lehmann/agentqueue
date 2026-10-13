@@ -4,3 +4,5 @@ node_modules/
 worker-configuration.d.ts
 .env
 .claude/
+.cf-credentials
+!.dev.vars.example

@@ -1,0 +1,3 @@
+# Worker secrets for local dev. Leave AQ_API_KEY empty to disable auth locally;
+# in production: npx wrangler secret put AQ_API_KEY
+AQ_API_KEY=

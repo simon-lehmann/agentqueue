@@ -7,7 +7,8 @@ Entry for Cloudflare's "Build the next GitHub" challenge. See [docs/PLAN.md](doc
 
 ```sh
 npm install
-cp .env.example .env   # fill in tokens; Artifacts needs the Workers Paid plan
-set -a; . ./.env; set +a
+cp .cf-credentials.example .cf-credentials   # Cloudflare tokens; Artifacts needs Workers Paid
+cp .dev.vars.example .dev.vars                 # Worker secrets (AQ_API_KEY optional locally)
+set -a; . ./.cf-credentials; set +a
 npm run dev
 ```

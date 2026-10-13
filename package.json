@@ -8,7 +8,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "types": "wrangler types",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sim": "node scripts/sim.mjs"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
@@ -16,5 +17,8 @@
   },
   "dependencies": {
     "isomorphic-git": "^1.44.2"
+  },
+  "bin": {
+    "aq": "scripts/aq.mjs"
   }
 }
