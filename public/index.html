@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentqueue</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23f6821f'/><path d='M9 10h14M9 16h10M9 22h6' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
+<style>
+:root {
+  --bg: #f6f6f3;
+  --panel: #ffffff;
+  --panel-2: #f1f1ed;
+  --line: #e3e3dc;
+  --text: #1b1b18;
+  --muted: #6d6d64;
+  --faint: #a3a39a;
+  --accent: #f6821f;
+  --accent-soft: #fdebd9;
+  --green: #1f9d55;
+  --green-soft: #def3e6;
+  --blue: #2f6fde;
+  --blue-soft: #e1ebfb;
+  --amber: #b7791f;
+  --amber-soft: #fbefd5;
+  --red: #d43c3c;
+  --red-soft: #fbe2e2;
+  --violet: #7a4fd6;
+  --violet-soft: #ece4fb;
+  --shadow: 0 1px 2px rgba(20,20,10,.06), 0 4px 14px rgba(20,20,10,.05);
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111110; --panel: #1a1a18; --panel-2: #222220; --line: #2e2e2b; --text: #ececE6;
+    --muted: #a0a097; --faint: #6b6b63; --accent-soft: #3a2614; --green: #3ccf7c; --green-soft: #14301f;
+    --blue: #6d9cf5; --blue-soft: #172440; --amber: #e5b04f; --amber-soft: #352914; --red: #f06a6a;
+    --red-soft: #3a1818; --violet: #a888f5; --violet-soft: #251c3d;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111110; --panel: #1a1a18; --panel-2: #222220; --line: #2e2e2b; --text: #ececE6;
+  --muted: #a0a097; --faint: #6b6b63; --accent-soft: #3a2614; --green: #3ccf7c; --green-soft: #14301f;
+  --blue: #6d9cf5; --blue-soft: #172440; --amber: #e5b04f; --amber-soft: #352914; --red: #f06a6a;
+  --red-soft: #3a1818; --violet: #a888f5; --violet-soft: #251c3d;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); -webkit-font-smoothing: antialiased; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+
+/* ---------- header ---------- */
+header {
+  display: flex; align-items: center; gap: 20px; padding: 14px 24px;
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+.brand svg { width: 26px; height: 26px; }
+.project { display: flex; flex-direction: column; min-width: 0; }
+.project .name { font-weight: 600; font-size: 15px; }
+.project .remote { color: var(--muted); font-family: var(--mono); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 560px; cursor: copy; }
+.sep { width: 1px; align-self: stretch; background: var(--line); }
+.stats { display: flex; gap: 10px; margin-left: auto; }
+.stat { display: flex; flex-direction: column; align-items: flex-end; padding: 4px 14px; border-radius: 10px; background: var(--panel-2); min-width: 92px; }
+.stat b { font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.stat.working b { color: var(--blue); } .stat.waiting b { color: var(--amber); }
+.stat.landed b { color: var(--green); } .stat.evicted b { color: var(--red); }
+.conn { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.conn.live i { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+
+/* ---------- layout ---------- */
+main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px 24px 24px; height: calc(100vh - 71px); }
+.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; min-height: 0; }
+.side { display: grid; grid-template-rows: minmax(0, 1.15fr) minmax(0, .8fr) minmax(0, 1fr); gap: 12px; min-height: 0; }
+
+.lane, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; min-height: 0; }
+.lane-head, .panel-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+.lane-head .t, .panel-head .t { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 13.5px; }
+.lane-head .t .count { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; background: var(--panel-2); border-radius: 999px; padding: 0 9px; font-size: 12px; }
+.lane-head .d { color: var(--muted); font-size: 11.5px; margin-top: 3px; line-height: 1.35; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.lane[data-lane="waiting"] .dot { background: var(--amber); }
+.lane[data-lane="working"] .dot { background: var(--blue); }
+.lane[data-lane="queued"] .dot { background: var(--violet); }
+.lane[data-lane="landed"] .dot { background: var(--green); }
+.lane-body, .panel-body { padding: 10px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.lane-body::-webkit-scrollbar, .panel-body::-webkit-scrollbar { width: 8px; }
+.lane-body::-webkit-scrollbar-thumb, .panel-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+.empty { color: var(--faint); font-size: 12px; text-align: center; padding: 18px 8px; border: 1.5px dashed var(--line); border-radius: 10px; }
+
+/* ---------- task cards ---------- */
+.card {
+  position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  padding: 10px 11px 10px 14px; overflow: hidden; will-change: transform;
+  transition: border-color .3s, background-color .3s, opacity .3s;
+}
+.card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--agent); }
+.card .top { display: flex; align-items: center; gap: 8px; }
+.avatar { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; background: var(--agent); flex: none; }
+.card .agent { font-weight: 650; font-size: 13px; }
+.card .id { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+.card .badges { margin-left: auto; display: flex; gap: 4px; }
+.badge { font-size: 10.5px; font-weight: 650; padding: 1px 7px; border-radius: 999px; white-space: nowrap; letter-spacing: .02em; }
+.badge.redo { background: var(--red-soft); color: var(--red); }
+.badge.landing { background: var(--violet-soft); color: var(--violet); }
+.badge.ff { background: var(--green-soft); color: var(--green); }
+.badge.abandoned { background: var(--panel-2); color: var(--muted); }
+.card .intent { margin: 6px 0 7px; font-size: 13px; line-height: 1.35; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--panel-2); color: var(--muted); border: 1px solid transparent; }
+.chip.claim { background: color-mix(in srgb, var(--agent) 12%, transparent); color: var(--text); border-color: color-mix(in srgb, var(--agent) 30%, transparent); }
+.chip.conflict { background: var(--red-soft); color: var(--red); border-color: color-mix(in srgb, var(--red) 35%, transparent); }
+.chip.undeclared { background: var(--amber-soft); color: var(--amber); }
+.chip.changed { background: var(--green-soft); color: var(--green); }
+.meta { margin-top: 7px; display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--muted); }
+.meta .row { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.meta .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; min-width: 54px; }
+.blocked { display: inline-flex; align-items: center; gap: 4px; color: var(--amber); font-weight: 600; }
+.blocked .who { display: inline-flex; align-items: center; gap: 4px; }
+.mini { width: 14px; height: 14px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 8px; color: #fff; font-weight: 700; }
+.card.status-waiting { background: color-mix(in srgb, var(--amber-soft) 45%, var(--panel)); }
+.card.status-queued.is-landing { border-color: var(--violet); }
+.card.status-landed { padding-top: 8px; padding-bottom: 8px; }
+.card.status-landed .intent { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+.card.status-abandoned { opacity: .55; }
+.card.redo-card { border-color: color-mix(in srgb, var(--red) 45%, var(--line)); }
+.card.hl { animation: hl 1.4s ease-out; }
+@keyframes hl { 0% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 60%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.card.shake { animation: shake .55s cubic-bezier(.36,.07,.19,.97), flashred 1.6s ease-out; }
+@keyframes shake { 10%, 90% { translate: -1px 0; } 20%, 80% { translate: 2px 0; } 30%, 50%, 70% { translate: -4px 0; } 40%, 60% { translate: 4px 0; } }
+@keyframes flashred { 0% { background: var(--red-soft); } 100% {} }
+.card.enter { animation: enter .45s cubic-bezier(.2,.8,.2,1); }
+@keyframes enter { from { opacity: 0; transform: translateY(-8px) scale(.98); } }
+.spin { width: 10px; height: 10px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; display: inline-block; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); display: inline-block; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+
+/* ---------- main rail ---------- */
+.rail { position: relative; padding-left: 4px; }
+.commit { position: relative; display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 5px 0; }
+.commit .node { position: relative; display: flex; justify-content: center; }
+.commit .node::before { content: ""; position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--line); }
+.commit:first-child .node::before { top: 12px; }
+.commit:last-child .node::before { bottom: calc(100% - 12px); }
+.commit .node i { position: relative; margin-top: 5px; width: 12px; height: 12px; border-radius: 50%; background: var(--panel); border: 3px solid var(--agent, var(--faint)); }
+.commit:first-child .node i { background: var(--agent, var(--faint)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--agent, var(--faint)) 20%, transparent); }
+.commit .msg { font-size: 12.5px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.commit .sub { display: flex; gap: 8px; font-size: 11px; color: var(--muted); }
+.commit .sub .sha { font-family: var(--mono); color: var(--faint); }
+.commit.enter { animation: enter .5s cubic-bezier(.2,.8,.2,1); }
+.headtag { font-size: 10px; font-weight: 700; color: var(--green); background: var(--green-soft); border-radius: 5px; padding: 0 5px; margin-left: 6px; letter-spacing: .04em; }
+
+/* ---------- leases ---------- */
+.lease { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--panel-2); }
+.lease .path { font-family: var(--mono); font-size: 12px; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lease .path svg { flex: none; color: var(--faint); }
+.lease .path span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lease .holders { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.holder { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.queue-behind { display: inline-flex; align-items: center; gap: 3px; color: var(--amber); font-size: 11px; }
+.queue-behind .mini { opacity: .85; }
+
+/* ---------- events ---------- */
+.ev { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: start; padding: 4px 2px; font-size: 12.5px; }
+.ev .ic { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 11px; margin-top: 1px; }
+.ev .when { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ev b { font-weight: 650; }
+.ev.enter { animation: enter .35s ease-out; }
+.ic.claimed { background: var(--panel-2); color: var(--muted); }
+.ic.waiting { background: var(--amber-soft); color: var(--amber); }
+.ic.started { background: var(--blue-soft); color: var(--blue); }
+.ic.queued, .ic.landing { background: var(--violet-soft); color: var(--violet); }
+.ic.landed { background: var(--green-soft); color: var(--green); }
+.ic.evicted, .ic.error { background: var(--red-soft); color: var(--red); }
+.ic.redo { background: var(--red-soft); color: var(--red); }
+.ic.created { background: var(--accent-soft); color: var(--accent); }
+
+/* ---------- picker ---------- */
+.picker { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); }
+.picker form { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); width: 420px; }
+.picker h1 { margin: 0 0 4px; font-size: 20px; }
+.picker p { margin: 0 0 18px; color: var(--muted); }
+.picker input { width: 100%; padding: 10px 12px; font: 14px var(--mono); border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); color: var(--text); }
+.picker button { margin-top: 12px; width: 100%; padding: 10px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 650; font-size: 14px; cursor: pointer; }
+.err { color: var(--red); font-size: 12px; margin-top: 8px; }
+
+@media (max-width: 1280px) {
+  main { grid-template-columns: 1fr; height: auto; }
+  .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lane { max-height: 70vh; }
+  .side { grid-template-rows: auto; }
+  .side .panel { max-height: 50vh; }
+}
+@media (max-width: 720px) {
+  header { flex-wrap: wrap; padding: 12px 16px; }
+  .stats { margin-left: 0; width: 100%; }
+  .stat { flex: 1; min-width: 0; }
+  main { padding: 12px 16px; }
+  .board { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#f6821f"/><path d="M9 10h14M9 16h10M9 22h6" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+    agentqueue
+  </div>
+  <div class="sep"></div>
+  <div class="project">
+    <span class="name" id="pname">—</span>
+    <span class="remote" id="premote" title="Click to copy main remote"></span>
+  </div>
+  <div class="stats">
+    <div class="stat working"><b id="s-working">0</b><span>Working</span></div>
+    <div class="stat waiting"><b id="s-waiting">0</b><span>Waiting</span></div>
+    <div class="stat landed"><b id="s-landed">0</b><span>Landed</span></div>
+    <div class="stat evicted"><b id="s-evicted">0</b><span>Evictions</span></div>
+  </div>
+  <div class="conn" id="conn"><i></i><span>connecting</span></div>
+</header>
+
+<main id="app">
+  <section class="board">
+    <div class="lane" data-lane="waiting">
+      <div class="lane-head"><div class="t"><span class="dot"></span>Waiting<span class="count">0</span></div>
+        <div class="d">Claims overlap a live lease. Starts automatically from fresh main when the blocker lands.</div></div>
+      <div class="lane-body"></div>
+    </div>
+    <div class="lane" data-lane="working">
+      <div class="lane-head"><div class="t"><span class="dot"></span>Working<span class="count">0</span></div>
+        <div class="d">Each agent owns a private Artifacts fork of main and holds a lease on its claims.</div></div>
+      <div class="lane-body"></div>
+    </div>
+    <div class="lane" data-lane="queued">
+      <div class="lane-head"><div class="t"><span class="dot"></span>Merge queue<span class="count">0</span></div>
+        <div class="d">Submitted forks, diffed in place. The coordinator is the single writer of main.</div></div>
+      <div class="lane-body"></div>
+    </div>
+    <div class="lane" data-lane="landed">
+      <div class="lane-head"><div class="t"><span class="dot"></span>Landed<span class="count">0</span></div>
+        <div class="d">Squashed onto main as one commit per task. Conflicts evict and redo, never block.</div></div>
+      <div class="lane-body"></div>
+    </div>
+  </section>
+  <aside class="side">
+    <div class="panel">
+      <div class="panel-head"><div class="t"><span class="dot" style="background:var(--green)"></span>main <span class="mono" style="color:var(--muted);font-weight:500">linear history</span></div></div>
+      <div class="panel-body"><div class="rail" id="rail"></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div class="t"><span class="dot" style="background:var(--accent)"></span>Leases</div></div>
+      <div class="panel-body" id="leases"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div class="t"><span class="dot" style="background:var(--muted)"></span>Activity</div></div>
+      <div class="panel-body" id="events"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  const project = params.get("project");
+  const theme = params.get("theme");
+  if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
+
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  if (!project) {
+    document.getElementById("app").remove();
+    document.querySelector("header").remove();
+    const d = document.createElement("div");
+    d.className = "picker";
+    d.innerHTML = `<form><h1>agentqueue</h1><p>Open the live board for a project.</p>
+      <input name="p" placeholder="project name, e.g. demo" autofocus pattern="[a-z0-9][a-z0-9-]{1,30}" required>
+      <button>Open board</button></form>`;
+    document.body.append(d);
+    d.querySelector("form").onsubmit = (e) => { e.preventDefault(); location.search = "?project=" + encodeURIComponent(e.target.p.value.trim()); };
+    return;
+  }
+
+  document.title = `${project} · agentqueue`;
+  $("#pname").textContent = project;
+  const base = `/p/${encodeURIComponent(project)}`;
+
+  // ---- agent colours: stable hue per agent name ----
+  // Distinct hues handed out in order of first appearance, so neighbours never
+  // share a colour; past the palette, fall back to golden-angle hues.
+  const PALETTE = [250, 25, 150, 300, 75, 195, 345, 110, 275, 50, 170, 225];
+  const hueCache = new Map();
+  function agentColor(name) {
+    if (!hueCache.has(name)) {
+      const i = hueCache.size;
+      const hue = i < PALETTE.length ? PALETTE[i] : (i * 137.508) % 360;
+      hueCache.set(name, `oklch(0.63 0.15 ${hue})`);
+    }
+    return hueCache.get(name);
+  }
+  function assignColors(tasks) {
+    [...tasks].sort((a, b) => a.createdAt - b.createdAt).forEach((t) => agentColor(t.agent));
+  }
+  const svg = (d, fill) => `<svg width="11" height="11" viewBox="0 0 16 16" fill="${fill ? "currentColor" : "none"}" stroke="${fill ? "none" : "currentColor"}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const ICON = {
+    created: svg('<path d="M8 1.5l1.8 4.7 4.7 1.8-4.7 1.8L8 14.5l-1.8-4.7L1.5 8l4.7-1.8z"/>', true),
+    claimed: svg('<path d="M8 3v10M3 8h10"/>'),
+    waiting: svg('<path d="M5.5 3.5v9M10.5 3.5v9"/>'),
+    started: svg('<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="11.5" cy="3.5" r="1.5"/><circle cx="8" cy="12.5" r="1.5"/><path d="M4.5 5v1.5a1.5 1.5 0 0 0 1.5 1.5h4a1.5 1.5 0 0 0 1.5-1.5V5M8 8v3"/>'),
+    redo: svg('<path d="M13 3v4H9"/><path d="M13 7A5 5 0 1 0 12 11"/>'),
+    queued: svg('<path d="M3 8h10M9 4l4 4-4 4"/>'),
+    landing: svg('<path d="M8 2v5M8 7l-4 7M8 7l4 7"/>'),
+    landed: svg('<path d="M3 8.5l3.2 3L13 4.5"/>'),
+    evicted: svg('<path d="M4 4l8 8M12 4l-8 8"/>'),
+    error: svg('<path d="M8 3v6M8 12.5v.5"/>'),
+    abandoned: svg('<path d="M3.5 8h9"/>'),
+  };
+  const initial = (n) => esc(String(n || "?").trim()[0]?.toUpperCase() || "?");
+  const short = (s) => (s ? s.slice(0, 7) : "");
+
+  function ago(ts) {
+    const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 5) return "now";
+    if (s < 60) return s + "s";
+    if (s < 3600) return Math.floor(s / 60) + "m";
+    return Math.floor(s / 3600) + "h";
+  }
+
+  // ---- state ----
+  let state = null;
+  let commits = null;
+  let commitsSupported = true;
+  const seenEvents = new Set();
+  const seenCommits = new Set();
+  let firstRender = true;
+  const landing = new Set();
+  const undeclared = new Map();
+  const landedInfo = new Map();
+  const flashes = new Map(); // task id -> class
+
+  const laneOf = (t) => ({ waiting: "waiting", working: "working", evicted: "working", queued: "queued", landed: "landed", abandoned: "landed" }[t.status] || "working");
+
+  // ---- rendering: task cards with FLIP transitions between lanes ----
+  const cards = new Map();
+
+  function cardHTML(t, byId) {
+    const isRedo = t.attempt > 1;
+    const badges = [];
+    if (isRedo) badges.push(`<span class="badge redo" title="Evicted on conflict and re-forked from new main">redo · a${t.attempt}</span>`);
+    if (t.status === "queued" && landing.has(t.id)) badges.push(`<span class="badge landing"><span class="spin" style="width:8px;height:8px;border-width:1.5px;vertical-align:-1px"></span> landing</span>`);
+    if (t.status === "abandoned") badges.push(`<span class="badge abandoned">abandoned</span>`);
+    if (t.status === "landed" && t.landedSha) badges.push(`<span class="badge ff mono" style="font-size:10.5px">${short(t.landedSha)}</span>`);
+
+    let meta = "";
+    if (t.status === "waiting" && t.blockedBy?.length) {
+      const who = t.blockedBy.map((id) => {
+        const b = byId.get(id);
+        const n = b?.agent || id;
+        return `<span class="who"><span class="mini" style="background:${agentColor(n)}">${initial(n)}</span>${esc(n)}</span>`;
+      }).join(", ");
+      meta += `<div class="row"><span class="k">blocked</span><span class="blocked">⟵ ${who}</span></div>`;
+    }
+    if (t.status !== "landed" && t.status !== "abandoned") {
+      if (t.status === "working" && t.fork) meta += `<div class="row"><span class="k">fork</span><span class="mono" style="font-size:11px">${esc(t.fork)}</span></div>`;
+      if (t.status === "working" && !t.fork) meta += `<div class="row"><span class="k">fork</span><span><span class="pulse"></span> forking main…</span></div>`;
+      if (t.baseSha && t.status !== "waiting") meta += `<div class="row"><span class="k">base</span><span class="mono" style="font-size:11px">${short(t.baseSha)}</span></div>`;
+    }
+    if (t.changed?.length && t.status !== "landed") {
+      const und = new Set(undeclared.get(t.id) || []);
+      meta += `<div class="row"><span class="k">changed</span><span class="chips">${t.changed.map((p) => `<span class="chip ${und.has(p) ? "undeclared" : "changed"}" title="${und.has(p) ? "Outside the task's claims" : "Changed"}">${esc(p)}</span>`).join("")}</span></div>`;
+    }
+    if (isRedo && t.conflicts?.length && t.status !== "landed") {
+      meta += `<div class="row"><span class="k">conflict</span><span class="chips">${t.conflicts.map((p) => `<span class="chip conflict">${esc(p)}</span>`).join("")}</span></div>`;
+    }
+
+    if (t.status === "landed" || t.status === "abandoned") {
+      return `<div class="top"><span class="avatar">${initial(t.agent)}</span><span class="agent">${esc(t.agent)}</span><span class="id">#${esc(t.id)}</span><span class="badges">${badges.join("")}</span></div>
+        <div class="intent">${esc(t.intent)}</div>`;
+    }
+    return `<div class="top"><span class="avatar">${initial(t.agent)}</span><span class="agent">${esc(t.agent)}</span><span class="id">#${esc(t.id)}</span><span class="badges">${badges.join("")}</span></div>
+      <div class="intent">${esc(t.intent)}</div>
+      <div class="chips">${(t.claims || []).map((c) => `<span class="chip claim" title="Claimed">${esc(c)}</span>`).join("")}</div>
+      ${meta ? `<div class="meta">${meta}</div>` : ""}`;
+  }
+
+  function renderBoard() {
+    const tasks = state.tasks;
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    const lanes = { waiting: [], working: [], queued: [], landed: [] };
+    for (const t of tasks) lanes[laneOf(t)].push(t);
+    // newest landings at top of landed lane; queue in FIFO order
+    lanes.landed.sort((a, b) => b.updatedAt - a.updatedAt);
+
+    // FLIP: first
+    const first = new Map();
+    for (const [id, el] of cards) first.set(id, el.getBoundingClientRect());
+
+    const alive = new Set();
+    for (const [lane, list] of Object.entries(lanes)) {
+      const body = $(`.lane[data-lane="${lane}"] .lane-body`);
+      $(`.lane[data-lane="${lane}"] .count`).textContent = list.length;
+      body.querySelectorAll(".empty").forEach((e) => e.remove());
+      list.forEach((t, i) => {
+        alive.add(t.id);
+        let el = cards.get(t.id);
+        const isNew = !el;
+        if (isNew) {
+          el = document.createElement("div");
+          el.dataset.id = t.id;
+          cards.set(t.id, el);
+          if (!firstRender) el.classList.add("enter");
+        }
+        el.style.setProperty("--agent", agentColor(t.agent));
+        const cls = ["card", `status-${t.status}`];
+        if (t.attempt > 1 && t.status !== "landed") cls.push("redo-card");
+        if (t.status === "queued" && landing.has(t.id)) cls.push("is-landing");
+        const keep = ["enter", "hl", "shake"].filter((c) => el.classList.contains(c));
+        el.className = [...cls, ...keep].join(" ");
+        const html = cardHTML(t, byId);
+        if (el._html !== html) { el.innerHTML = html; el._html = html; }
+        if (body.children[i] !== el) body.insertBefore(el, body.children[i] || null);
+      });
+      if (!list.length) {
+        const e = document.createElement("div");
+        e.className = "empty";
+        e.textContent = { waiting: "No blocked tasks", working: "No agents working", queued: "Queue empty", landed: "Nothing landed yet" }[lane];
+        body.append(e);
+      }
+    }
+    for (const [id, el] of cards) if (!alive.has(id)) { el.remove(); cards.delete(id); }
+
+    // FLIP: invert + play
+    for (const [id, el] of cards) {
+      const a = first.get(id);
+      if (!a) continue;
+      const b = el.getBoundingClientRect();
+      const dx = a.left - b.left, dy = a.top - b.top;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+        el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { duration: Math.abs(dx) > 40 ? 650 : 350, easing: "cubic-bezier(.2,.8,.2,1)" });
+        if (Math.abs(dx) > 40) flash(id, "hl");
+      }
+    }
+    for (const [id, c] of flashes) { flash(id, c); }
+    flashes.clear();
+  }
+
+  function flash(id, cls) {
+    const el = cards.get(id);
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), 1700);
+  }
+
+  function renderStats() {
+    const ts = state.tasks;
+    const n = (s) => ts.filter((t) => t.status === s).length;
+    $("#s-working").textContent = n("working") + n("evicted");
+    $("#s-waiting").textContent = n("waiting");
+    $("#s-landed").textContent = n("landed");
+    $("#s-evicted").textContent = state.events.filter((e) => e.type === "task.evicted").length || ts.reduce((a, t) => a + Math.max(0, t.attempt - 1), 0);
+    $("#premote").textContent = state.mainRemote || "";
+  }
+
+  function renderRail() {
+    const byId = new Map(state.tasks.map((t) => [t.id, t]));
+    let list;
+    if (commits) {
+      list = commits.map((c) => {
+        const m = /Agent-Task:\s*(\S+)/.exec(c.message || "");
+        const t = m && byId.get(m[1]);
+        return { hash: c.hash, msg: (c.message || "").split("\n")[0], agent: c.author?.name || t?.agent || "", task: m?.[1], ts: (c.committedAt || 0) * 1000 };
+      });
+    } else {
+      list = state.tasks.filter((t) => t.status === "landed" && t.landedSha)
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .map((t) => ({ hash: t.landedSha, msg: t.intent, agent: t.agent, task: t.id, ts: t.updatedAt }));
+    }
+    const rail = $("#rail");
+    if (!list.length) { rail.innerHTML = `<div class="empty">No commits on main yet</div>`; return; }
+    rail.innerHTML = list.map((c, i) => {
+      const bot = !c.task;
+      const col = bot ? "var(--faint)" : agentColor(c.agent);
+      const isNew = !firstRender && !seenCommits.has(c.hash);
+      return `<div class="commit${isNew ? " enter" : ""}" style="--agent:${col}">
+        <div class="node"><i></i></div>
+        <div><div class="msg">${esc(c.msg)}${i === 0 ? `<span class="headtag">HEAD</span>` : ""}</div>
+        <div class="sub"><span class="sha">${short(c.hash)}</span><span>${esc(c.agent)}</span>${c.task ? `<span class="mono" style="font-size:11px">Agent-Task: ${esc(c.task)}</span>` : ""}<span style="margin-left:auto">${c.ts ? ago(c.ts) : ""}</span></div></div>
+      </div>`;
+    }).join("");
+    for (const c of list) seenCommits.add(c.hash);
+  }
+
+  function renderLeases() {
+    const byId = new Map(state.tasks.map((t) => [t.id, t]));
+    const rows = [];
+    for (const l of state.leases) {
+      const t = byId.get(l.task);
+      for (const path of l.claims) {
+        const waiters = state.tasks.filter((w) => w.status === "waiting" && w.blockedBy?.includes(l.task) && w.claims.some((c) => c === path || c.startsWith(path) || path.startsWith(c)));
+        rows.push({ path, agent: t?.agent || l.task, status: t?.status, waiters });
+      }
+    }
+    rows.sort((a, b) => a.path.localeCompare(b.path));
+    const el = $("#leases");
+    if (!rows.length) { el.innerHTML = `<div class="empty">No paths leased</div>`; return; }
+    const icon = (p) => p.endsWith("/")
+      ? `<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 3A1.5 1.5 0 0 1 3 1.5h3.4l1.6 1.6H13A1.5 1.5 0 0 1 14.5 4.6V12A1.5 1.5 0 0 1 13 13.5H3A1.5 1.5 0 0 1 1.5 12z"/></svg>`
+      : `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 1.5h5l3.5 3.5v9.5h-8.5z"/><path d="M9 1.5V5h3.5"/></svg>`;
+    el.innerHTML = rows.map((r) => `<div class="lease">
+      <div class="path">${icon(r.path)}<span title="${esc(r.path)}">${esc(r.path)}</span></div>
+      <div class="holders">
+        <span class="holder" style="color:${agentColor(r.agent)}"><span class="mini" style="background:${agentColor(r.agent)}">${initial(r.agent)}</span>${esc(r.agent)}</span>
+        ${r.waiters.length ? `<span class="queue-behind" title="Waiting for this lease">⟵ ${r.waiters.map((w) => `<span class="mini" style="background:${agentColor(w.agent)}" title="${esc(w.agent)}">${initial(w.agent)}</span>`).join("")}</span>` : ""}
+      </div></div>`).join("");
+  }
+
+  const EV = {
+    "project.created": ["created", "✦", () => `Project created with a fresh <b>main</b> repo`],
+    "task.claimed": ["claimed", "＋", (e, a) => `${a} claimed ${(e.data.claims || []).map((c) => `<code>${esc(c)}</code>`).join(", ")}`],
+    "task.waiting": ["waiting", "⏸", (e, a, n) => `${a} waits on ${(e.data.blockedBy || []).map(n).join(", ")} (lease overlap)`],
+    "task.started": ["started", "⑂", (e, a) => `${a} forked main @ <code>${short(e.data.base)}</code>`],
+    "task.redo": ["redo", "↻", (e, a) => `${a} redoes intent on new main @ <code>${short(e.data.base)}</code> (attempt ${e.data.attempt})`],
+    "task.queued": ["queued", "→", (e, a) => `${a} submitted ${e.data.changed?.length || 0} file${e.data.changed?.length === 1 ? "" : "s"}${e.data.undeclared?.length ? ` · <span style="color:var(--amber)">${e.data.undeclared.length} outside claims</span>` : ""}`],
+    "task.landing": ["landing", "⧗", (e, a) => `Merging ${a} onto main`],
+    "task.landed": ["landed", "✓", (e, a) => `${a} landed <code>${short(e.data.sha)}</code>`],
+    "task.evicted": ["evicted", "✕", (e, a) => `${a} evicted: conflict on ${(e.data.conflicts || []).map((c) => `<code>${esc(c)}</code>`).join(", ") || "merge"}`],
+    "task.abandoned": ["claimed", "–", (e, a) => `${a} abandoned the task`],
+    "queue.error": ["error", "!", (e) => `Queue error: ${esc(String(e.data.error || "").slice(0, 120))}`],
+  };
+
+  function renderEvents() {
+    const byId = new Map(state.tasks.map((t) => [t.id, t]));
+    const who = (id) => {
+      const t = byId.get(id);
+      const n = t?.agent || id || "";
+      return `<b style="color:${agentColor(n)}">${esc(n)}</b>`;
+    };
+    const el = $("#events");
+    el.innerHTML = state.events.slice(0, 120).map((e) => {
+      const [cls, ic, fn] = EV[e.type] || ["claimed", "·", () => esc(e.type)];
+      const key = `${e.ts}|${e.type}|${e.task}`;
+      const isNew = !firstRender && !seenEvents.has(key);
+      return `<div class="ev${isNew ? " enter" : ""}"><span class="ic ${cls}">${ic}</span><span>${fn(e, who(e.task), who)}</span><span class="when" data-ts="${e.ts}">${ago(e.ts)}</span></div>`;
+    }).join("") || `<div class="empty">Waiting for activity</div>`;
+    for (const e of state.events) seenEvents.add(`${e.ts}|${e.type}|${e.task}`);
+  }
+
+  // Derive transient per-task facts from the event log (newest first).
+  function deriveFromEvents() {
+    landing.clear();
+    undeclared.clear();
+    const done = new Set();
+    for (const e of state.events) {
+      if (!e.task) continue;
+      if (e.type === "task.queued" && e.data.undeclared?.length && !undeclared.has(e.task)) undeclared.set(e.task, e.data.undeclared);
+      if (done.has(e.task)) continue;
+      if (e.type === "task.landing") landing.add(e.task);
+      if (["task.landing", "task.landed", "task.evicted", "task.queued", "task.started", "task.redo"].includes(e.type)) done.add(e.task);
+    }
+  }
+
+  function render() {
+    if (!state) return;
+    deriveFromEvents();
+    renderStats();
+    renderBoard();
+    renderRail();
+    renderLeases();
+    renderEvents();
+    firstRender = false;
+  }
+
+  // ---- data ----
+  let inflight = null, again = false;
+  async function refresh() {
+    if (inflight) { again = true; return inflight; }
+    inflight = (async () => {
+      try {
+        const r = await fetch(base + "/");
+        if (!r.ok) throw new Error(r.status);
+        state = await r.json();
+        if (commitsSupported) {
+          const c = await fetch(base + "/commits").catch(() => null);
+          if (c && c.ok) commits = await c.json();
+          else if (c && c.status === 404) { commitsSupported = false; commits = null; }
+        }
+        render();
+      } catch (err) {
+        console.warn("refresh failed", err);
+      } finally {
+        inflight = null;
+        if (again) { again = false; refresh(); }
+      }
+    })();
+    return inflight;
+  }
+  let t;
+  const soon = () => { clearTimeout(t); t = setTimeout(refresh, 120); };
+
+  // ---- live updates ----
+  let ws, poll, retry = 0;
+  function setConn(live, label) {
+    const c = $("#conn");
+    c.classList.toggle("live", live);
+    c.lastElementChild.textContent = label;
+  }
+  function connect() {
+    const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${base}/ws`;
+    try { ws = new WebSocket(url); } catch { startPolling(); return; }
+    ws.onopen = () => { retry = 0; stopPolling(); setConn(true, "live"); refresh(); };
+    ws.onmessage = (m) => {
+      try {
+        const e = JSON.parse(m.data);
+        if (e.type === "task.evicted") flashes.set(e.task, "shake");
+        if (e.type === "task.landed") flashes.set(e.task, "hl");
+      } catch {}
+      soon();
+    };
+    ws.onclose = () => {
+      setConn(false, "reconnecting");
+      startPolling();
+      setTimeout(connect, Math.min(10000, 500 * 2 ** retry++));
+    };
+    ws.onerror = () => ws.close();
+  }
+  function startPolling() { if (!poll) poll = setInterval(refresh, 2000); }
+  function stopPolling() { clearInterval(poll); poll = null; }
+
+  $("#premote").onclick = () => navigator.clipboard?.writeText(state?.mainRemote || "");
+  setInterval(() => document.querySelectorAll(".when[data-ts]").forEach((el) => (el.textContent = ago(+el.dataset.ts))), 5000);
+
+  refresh();
+  connect();
+})();
+</script>
+</body>
+</html>
