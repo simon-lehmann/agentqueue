@@ -1,4 +1,6 @@
 export { RepoCoordinator } from "./coordinator";
+export { SwarmAgent } from "./agent";
+import { DEMO_GOALS, DEMO_SEED } from "./demo";
 
 const NAME = /^[a-z0-9][a-z0-9-]{1,30}$/;
 
@@ -19,6 +21,16 @@ export default {
 			if (rest === "/ws") return coord.fetch(req);
 			if (rest === "/" && req.method === "GET") return Response.json(await coord.state());
 			if (rest === "/init" && req.method === "POST") return Response.json(await coord.init(project, body));
+			if (rest === "/files") return Response.json(await coord.listFiles());
+			if (rest === "/commits") return Response.json(await coord.commits());
+			if (rest === "/swarm" && req.method === "POST") {
+				if (!Array.isArray(body.goals)) return Response.json({ error: "goals[] required" }, { status: 400 });
+				return Response.json(await coord.swarm(body.goals));
+			}
+			if (rest === "/demo" && req.method === "POST") {
+				await coord.init(project, { seed: DEMO_SEED });
+				return Response.json(await coord.swarm(DEMO_GOALS));
+			}
 			if (rest === "/tasks" && req.method === "POST") {
 				if (!body.intent || !Array.isArray(body.claims)) return Response.json({ error: "intent and claims[] required" }, { status: 400 });
 				return Response.json(await coord.claim({ intent: body.intent, claims: body.claims, agent: body.agent ?? "anonymous" }));

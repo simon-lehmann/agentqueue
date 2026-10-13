@@ -8,8 +8,15 @@
     // remote: Artifacts has no local emulator; dev talks to the real service
     { "binding": "ARTIFACTS", "namespace": "agentqueue", "remote": true }
   ],
+  "ai": { "binding": "AI", "remote": true },
   "durable_objects": {
-    "bindings": [{ "name": "COORDINATOR", "class_name": "RepoCoordinator" }]
+    "bindings": [
+      { "name": "COORDINATOR", "class_name": "RepoCoordinator" },
+      { "name": "AGENT", "class_name": "SwarmAgent" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RepoCoordinator"] }]
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RepoCoordinator"] },
+    { "tag": "v2", "new_sqlite_classes": ["SwarmAgent"] }
+  ]
 }
