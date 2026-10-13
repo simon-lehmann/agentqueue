@@ -248,7 +248,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     <div class="stat working"><b id="s-working">0</b><span>Working</span></div>
     <div class="stat waiting"><b id="s-waiting">0</b><span>Waiting</span></div>
     <div class="stat landed"><b id="s-landed">0</b><span>Landed</span></div>
-    <div class="stat evicted"><b id="s-evicted">0</b><span>Evictions</span></div>
+    <div class="stat evicted"><b id="s-evicted">0</b><span title="Evictions on conflict plus reviewer-requested changes">Redos</span></div>
   </div>
   <div class="conn" id="conn"><i></i><span>connecting</span></div>
 </header>
@@ -527,7 +527,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     $("#s-working").textContent = n("working") + n("evicted") + n("reviewing");
     $("#s-waiting").textContent = n("waiting");
     $("#s-landed").textContent = n("landed");
-    $("#s-evicted").textContent = state.events.filter((e) => e.type === "task.evicted").length || ts.reduce((a, t) => a + Math.max(0, t.attempt - 1), 0);
+    $("#s-evicted").textContent = ts.reduce((a, t) => a + Math.max(0, t.attempt - 1), 0);
     $("#premote").textContent = state.mainRemote || "";
   }
 
@@ -602,7 +602,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     "task.landed": ["landed", (e, a) => `${a} landed <code>${short(e.data.sha)}</code>`],
     "task.evicted": ["evicted", (e, a) => `${a} evicted: conflict on ${(e.data.conflicts || []).map((c) => `<code>${esc(c)}</code>`).join(", ") || "merge"}`],
     "task.abandoned": ["abandoned", (e, a) => `${a} abandoned the task`],
-    "agent.note": ["note", (e, a) => `<span style="color:var(--muted)">${e.task ? a + ": " : ""}${esc(String(e.data.message || "").replace(/(.)\1{5,}/g, "$1$1$1…").slice(0, 160))}</span>`],
+    "agent.note": ["note", (e, a) => `<span style="color:var(--muted)">${e.task ? a + ": " : ""}${esc(String(e.data.message || "").replace(/^agent \S+:\s*/, "").replace(/(.)\1{5,}/g, "$1$1$1…").slice(0, 160))}</span>`],
     "queue.error": ["error", (e) => `Queue error: ${esc(String(e.data.error || "").slice(0, 120))}`],
   };
 
