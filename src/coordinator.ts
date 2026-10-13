@@ -256,6 +256,42 @@ export class RepoCoordinator extends DurableObject<Env> {
 		}
 	}
 
+	// ---- read-only views (served from Artifacts, no clone) ------------------
+
+	async listFiles(): Promise<string[]> {
+		using main = await this.env.ARTIFACTS.get(this.meta("mainRepo")!);
+		const [head] = await main.log({ ref: "main", limit: 1 });
+		if (!head) return [];
+		const out: string[] = [];
+		const walk = async (tree: string, prefix: string) => {
+			for (const e of (await main.readTree(tree)) ?? []) {
+				if (e.type === "tree") await walk(e.hash, `${prefix}${e.name}/`);
+				else out.push(prefix + e.name);
+			}
+		};
+		await walk(head.treeHash, "");
+		return out.sort();
+	}
+
+	async commits(limit = 50) {
+		using main = await this.env.ARTIFACTS.get(this.meta("mainRepo")!);
+		return main.log({ ref: "main", limit });
+	}
+
+	async note(task: string | null, message: string) {
+		this.log("agent.note", task, { message });
+	}
+
+	// Launch Workers AI agents, one Durable Object each, on a list of goals.
+	async swarm(goals: { agent: string; goal: string }[]) {
+		for (const g of goals) {
+			const stub = this.env.AGENT.get(this.env.AGENT.idFromName(`${this.project}/${g.agent}/${crypto.randomUUID()}`));
+			await stub.begin(this.project, g.agent, g.goal);
+		}
+		this.log("swarm.launched", null, { agents: goals.map((g) => g.agent) });
+		return { launched: goals.length };
+	}
+
 	// ---- observability ------------------------------------------------------
 
 	private log(type: string, task: string | null, data: unknown) {
