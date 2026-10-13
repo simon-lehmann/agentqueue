@@ -25,7 +25,7 @@ function flags(args) {
 async function api(project, method, path, body) {
 	const res = await fetch(`${BASE}/p/${project}${path}`, {
 		method,
-		headers: { "content-type": "application/json" },
+		headers: { "content-type": "application/json", ...(process.env.AQ_KEY && { authorization: `Bearer ${process.env.AQ_KEY}` }) },
 		body: body && JSON.stringify(body),
 	});
 	const data = await res.json();

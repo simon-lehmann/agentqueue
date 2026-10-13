@@ -17,6 +17,13 @@ export default {
 		const coord = env.COORDINATOR.get(env.COORDINATOR.idFromName(project));
 		const body = req.method === "POST" ? await req.json<any>().catch(() => ({})) : {};
 
+		// Reads are public so the dashboard can be shared. Anything that writes,
+		// or hands out a repo token, needs the API key once one is configured.
+		const secretRoute = req.method === "POST" || /^\/tasks\/[a-z0-9]+$/.test(rest);
+		if (secretRoute && rest !== "/demo" && env.AQ_API_KEY && req.headers.get("Authorization") !== `Bearer ${env.AQ_API_KEY}`) {
+			return Response.json({ error: "unauthorized" }, { status: 401 });
+		}
+
 		try {
 			if (rest === "/ws") return coord.fetch(req);
 			if (rest === "/" && req.method === "GET") return Response.json(await coord.state());
@@ -27,7 +34,11 @@ export default {
 				if (!Array.isArray(body.goals)) return Response.json({ error: "goals[] required" }, { status: 400 });
 				return Response.json(await coord.swarm(body.goals));
 			}
+			// One-click demo for visitors: fresh demo-* projects only, globally rate limited.
 			if (rest === "/demo" && req.method === "POST") {
+				if (!project.startsWith("demo-")) return Response.json({ error: "demo projects must be named demo-*" }, { status: 400 });
+				if ((await coord.state()).tasks.length) return Response.json({ error: "project already has tasks" }, { status: 409 });
+				if (!(await env.DEMO_LIMIT.limit({ key: "global" })).success) return Response.json({ error: "demo busy, try again in a minute" }, { status: 429 });
 				await coord.init(project, { seed: DEMO_SEED });
 				return Response.json(await coord.swarm(DEMO_GOALS));
 			}

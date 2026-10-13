@@ -9,6 +9,7 @@
     { "binding": "ARTIFACTS", "namespace": "agentqueue", "remote": true }
   ],
   "ai": { "binding": "AI", "remote": true },
+  "ratelimits": [{ "name": "DEMO_LIMIT", "namespace_id": "1001", "simple": { "limit": 2, "period": 60 } }],
   "durable_objects": {
     "bindings": [
       { "name": "COORDINATOR", "class_name": "RepoCoordinator" },

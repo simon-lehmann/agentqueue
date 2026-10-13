@@ -11,7 +11,7 @@ const PROJECT = process.argv[3] ?? `sim-${Date.now().toString(36)}`;
 const api = async (method, path, body) => {
 	const res = await fetch(`${BASE}/p/${PROJECT}${path}`, {
 		method,
-		headers: { "content-type": "application/json" },
+		headers: { "content-type": "application/json", ...(process.env.AQ_KEY && { authorization: `Bearer ${process.env.AQ_KEY}` }) },
 		body: body && JSON.stringify(body),
 	});
 	const data = await res.json();
