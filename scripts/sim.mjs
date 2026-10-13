@@ -38,7 +38,7 @@ async function work(assignment, edit) {
 }
 
 const append = (file, line) => (dir) => writeFileSync(join(dir, file), readFileSync(join(dir, file), "utf8") + line + "\n");
-const replace = (file, from, to) => (dir) => writeFileSync(join(dir, file), readFileSync(join(dir, file), "utf8").replace(from, to));
+const replace = (file, from, to) => /* from: string | RegExp */ (dir) => writeFileSync(join(dir, file), readFileSync(join(dir, file), "utf8").replace(from, to));
 
 async function waitFor(id, pred, label) {
 	for (let i = 0; i < 60; i++) {
@@ -60,10 +60,10 @@ await api("POST", "/init", {
 });
 
 // 1. Disjoint claims run in parallel.
-const a = await api("POST", "/tasks", { agent: "alice", intent: "Add logout to auth", claims: ["src/auth.ts"] });
-const b = await api("POST", "/tasks", { agent: "bob", intent: "Add refunds to billing", claims: ["src/billing.ts"] });
+const a = await api("POST", "/tasks", { agent: "alice", intent: "Add a logout() stub to auth that returns false", claims: ["src/auth.ts"] });
+const b = await api("POST", "/tasks", { agent: "bob", intent: "Add a refund(n) helper to billing that returns -n", claims: ["src/billing.ts"] });
 // 2. Overlapping claim waits instead of conflicting later.
-const c = await api("POST", "/tasks", { agent: "carol", intent: "Add session expiry to auth", claims: ["src/auth.ts"] });
+const c = await api("POST", "/tasks", { agent: "carol", intent: "Add an exported expiry constant of 3600 seconds to auth", claims: ["src/auth.ts"] });
 console.log("claimed:", [a, b, c].map((x) => `${x.task.agent}=${x.task.status}`).join(" "));
 if (c.task.status !== "waiting") throw new Error("carol should wait on alice");
 
@@ -81,9 +81,10 @@ await work(c2, append("src/auth.ts", "export const expiry = 3600;"));
 await waitFor(c.task.id, (t) => t.status === "landed", "land");
 console.log("carol landed after alice (no conflict)");
 
-// 3. Undeclared overlap: dave claims README but also edits ui.ts; erin owns ui.ts.
-const d = await api("POST", "/tasks", { agent: "dave", intent: "Rename product in README", claims: ["README.md"] });
-const e = await api("POST", "/tasks", { agent: "erin", intent: "Retitle the UI", claims: ["src/ui.ts"] });
+// 3. Under-claiming: dave claims only README but also edits ui.ts, which erin changed.
+//    The reviewer (or, failing that, the merge) sends him back to redo on the new main.
+const d = await api("POST", "/tasks", { agent: "dave", intent: "Rename the product to Acme in the README heading", claims: ["README.md"] });
+const e = await api("POST", "/tasks", { agent: "erin", intent: "Change the UI title to Erin's Demo", claims: ["src/ui.ts"] });
 await work(e, replace("src/ui.ts", '"Demo"', '"Erin\'s Demo"'));
 await waitFor(e.task.id, (t) => t.status === "landed", "land");
 await work(d, (dir) => {
@@ -91,7 +92,7 @@ await work(d, (dir) => {
 	replace("src/ui.ts", '"Demo"', '"Acme"')(dir);
 });
 const d2 = await waitFor(d.task.id, (t) => t.status === "working" && t.attempt === 2, "be evicted and redone");
-console.log(`dave evicted on ${JSON.stringify(d2.task.conflicts)}; redo attempt ${d2.task.attempt} forked from new main`);
+console.log(`dave sent back (${d2.task.feedback}); redo attempt ${d2.task.attempt} forked from new main`);
 await work(d2, replace("README.md", "# demo", "# Acme"));
 await waitFor(d.task.id, (t) => t.status === "landed", "land");
 
