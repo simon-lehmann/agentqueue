@@ -13,5 +13,8 @@
   "devDependencies": {
     "typescript": "^7.0.2",
     "wrangler": "^4.149.0"
+  },
+  "dependencies": {
+    "isomorphic-git": "^1.44.2"
   }
 }
