@@ -76,9 +76,9 @@ header {
 .conn.live i { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 
 /* ---------- layout ---------- */
-main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px 24px 24px; height: calc(100vh - 71px); }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; padding: 16px 24px 24px; height: calc(100vh - 71px); }
 .board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; min-height: 0; }
-.side { display: grid; grid-template-rows: minmax(0, 1.15fr) minmax(0, .8fr) minmax(0, 1fr); gap: 12px; min-height: 0; }
+.side { min-width: 0; display: grid; grid-template-rows: minmax(0, 1.15fr) minmax(0, .8fr) minmax(0, 1fr); gap: 12px; min-height: 0; }
 
 .lane, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; min-height: 0; }
 .lane-head, .panel-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
@@ -146,7 +146,7 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
 
 /* ---------- main rail ---------- */
 .rail { position: relative; padding-left: 4px; }
-.commit { position: relative; display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 5px 0; }
+.commit { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; padding: 5px 0; }
 .commit .node { position: relative; display: flex; justify-content: center; }
 .commit .node::before { content: ""; position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--line); }
 .commit:first-child .node::before { top: 12px; }
@@ -170,7 +170,7 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
 .queue-behind .mini { opacity: .85; }
 
 /* ---------- events ---------- */
-.ev { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: start; padding: 4px 2px; font-size: 12.5px; }
+.ev { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 4px 2px; font-size: 12.5px; }
 .ev .ic { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 11px; margin-top: 1px; }
 .ev .when { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ev b { font-weight: 650; }
@@ -186,6 +186,8 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
 .ic.reviewed { background: var(--panel-2); color: var(--muted); }
 .ic.note, .ic.abandoned { background: var(--panel-2); color: var(--faint); }
 .ev.note { opacity: .75; font-size: 12px; }
+.ev.note > span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel, .lane { min-width: 0; }
 .verdict { font-weight: 700; padding: 0 6px; border-radius: 5px; }
 .verdict.ok { color: var(--green); background: var(--green-soft); }
 .verdict.no { color: var(--amber); background: var(--amber-soft); }
@@ -383,6 +385,7 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
 
   // ---- rendering: task cards with FLIP transitions between lanes ----
   const cards = new Map();
+  let launchEl = null;
 
   function cardHTML(t, byId) {
     const isRedo = t.attempt > 1;
@@ -476,10 +479,15 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
         if (body.children[i] !== el) body.insertBefore(el, body.children[i] || null);
       });
       if (!list.length) {
-        const e = document.createElement("div");
+        let e = document.createElement("div");
         if (lane === "working" && !tasks.length) {
-          e.className = "empty launch";
-          e.innerHTML = `<button class="btn" data-launch>Launch demo swarm</button><p>Seeds this project's main repo and starts 8 Workers AI agents on it.</p>`;
+          // Persistent element so button state and errors survive re-renders.
+          if (!launchEl) {
+            launchEl = document.createElement("div");
+            launchEl.className = "empty launch";
+            launchEl.innerHTML = `<button class="btn" data-launch>Launch demo swarm</button><p>Seeds this project's main repo and starts 8 Workers AI agents on it.</p>`;
+          }
+          e = launchEl;
         } else {
           e.className = "empty";
           e.textContent = { waiting: "No blocked tasks", working: "No agents working", reviewing: "Nothing in review", queued: "Queue empty", landed: "Nothing landed yet" }[lane];
@@ -594,7 +602,7 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
     "task.landed": ["landed", (e, a) => `${a} landed <code>${short(e.data.sha)}</code>`],
     "task.evicted": ["evicted", (e, a) => `${a} evicted: conflict on ${(e.data.conflicts || []).map((c) => `<code>${esc(c)}</code>`).join(", ") || "merge"}`],
     "task.abandoned": ["abandoned", (e, a) => `${a} abandoned the task`],
-    "agent.note": ["note", (e, a) => `<span style="color:var(--muted)">${a}: ${esc(String(e.data.message || "").slice(0, 160))}</span>`],
+    "agent.note": ["note", (e, a) => `<span style="color:var(--muted)">${e.task ? a + ": " : ""}${esc(String(e.data.message || "").replace(/(.)\1{5,}/g, "$1$1$1…").slice(0, 160))}</span>`],
     "queue.error": ["error", (e) => `Queue error: ${esc(String(e.data.error || "").slice(0, 120))}`],
   };
 
@@ -711,11 +719,21 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
   let launching = false;
   async function launch() {
     if (launching) return;
+    // Demos only run in throwaway "demo-*" projects; anywhere else, open a fresh one.
+    if (!project.startsWith("demo-")) { location.search = `?project=demo-${Date.now().toString(36)}&launch=1`; return; }
     launching = true;
+    document.querySelectorAll(".launch .err").forEach((e) => e.remove());
     document.querySelectorAll("[data-launch]").forEach((b) => { b.disabled = true; b.textContent = "Seeding main and launching agents…"; });
     try {
       const r = await fetch(base + "/demo", { method: "POST" });
-      if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(
+          r.status === 429 ? "Demo launches are rate limited (2 per minute). Try again shortly."
+          : r.status === 409 ? "This project already has tasks. Start a fresh demo instead."
+          : body.error || `Launch failed (HTTP ${r.status})`,
+        );
+      }
     } catch (err) {
       launching = false;
       document.querySelectorAll("[data-launch]").forEach((b) => { b.disabled = false; b.textContent = "Launch demo swarm"; b.insertAdjacentHTML("afterend", `<div class="err">${esc(err.message)}</div>`); });
