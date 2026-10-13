@@ -2,8 +2,8 @@ import { DurableObject } from "cloudflare:workers";
 import { changedPaths, intersect } from "./diff";
 import { Mirror } from "./mirror";
 
-export type Status = "waiting" | "working" | "queued" | "landed" | "evicted" | "abandoned";
-const ACTIVE: Status[] = ["working", "queued"]; // statuses that hold a lease
+export type Status = "waiting" | "working" | "reviewing" | "queued" | "landed" | "evicted" | "abandoned";
+const ACTIVE: Status[] = ["working", "reviewing", "queued"]; // statuses that hold a lease
 
 export interface Task {
 	id: string;
@@ -19,6 +19,8 @@ export interface Task {
 	blockedBy: string[];
 	landedSha: string | null;
 	conflicts: string[];
+	feedback: string | null; // why the current attempt exists: conflict or review notes
+	reviews: number;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -32,6 +34,33 @@ export interface Assignment {
 type Row = Record<string, SqlStorageValue>;
 
 const json = (v: unknown) => JSON.stringify(v);
+const MAX_REVIEWS = 2;
+const REVIEW_MODEL = "@cf/openai/gpt-oss-120b";
+
+async function reviewDiff(env: Env, intent: string, claims: string[], undeclared: string[], diff: string) {
+	const out: any = await env.AI.run(REVIEW_MODEL as any, {
+		messages: [
+			{
+				role: "system",
+				content:
+					"You review changes made by coding agents before they merge. Approve if the change correctly and completely implements the intent without unrelated edits or obvious bugs. Be pragmatic: style nits are not grounds for rejection. Reply with JSON only.",
+			},
+			{
+				role: "user",
+				content: `Intent: ${intent}\nClaimed files: ${claims.join(", ")}\n${undeclared.length ? `Edited without claiming: ${undeclared.join(", ")}\n` : ""}\n${diff}\n\nReply as {"approve": true|false, "comments": "<one or two sentences>"}`,
+			},
+		],
+		max_tokens: 3000,
+		reasoning_effort: "low",
+	} as any);
+	const text: string = out?.choices?.[0]?.message?.content ?? out?.response ?? "";
+	try {
+		const r = JSON.parse(text.match(/\{[\s\S]*\}/)![0]);
+		return { approve: Boolean(r.approve), comments: String(r.comments ?? "").slice(0, 500) };
+	} catch {
+		return { approve: true, comments: "reviewer gave no verdict; approved by default" };
+	}
+}
 const newId = () => Math.random().toString(36).slice(2, 8);
 
 // One coordinator per project. It is the only writer of the project's main
@@ -49,6 +78,11 @@ export class RepoCoordinator extends DurableObject<Env> {
 			id TEXT PRIMARY KEY, intent TEXT, agent TEXT, claims TEXT, status TEXT, attempt INTEGER,
 			fork TEXT, base_sha TEXT, head_sha TEXT, changed TEXT, blocked_by TEXT, landed_sha TEXT,
 			conflicts TEXT, seq INTEGER, created_at INTEGER, updated_at INTEGER)`);
+		for (const col of ["feedback TEXT", "reviews INTEGER DEFAULT 0"]) {
+			try {
+				this.sql.exec(`ALTER TABLE tasks ADD COLUMN ${col}`);
+			} catch {} // already present
+		}
 		this.sql.exec(`CREATE TABLE IF NOT EXISTS events (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, type TEXT, task TEXT, data TEXT)`);
 	}
@@ -117,6 +151,8 @@ export class RepoCoordinator extends DurableObject<Env> {
 			blockedBy: JSON.parse(r.blocked_by as string),
 			landedSha: r.landed_sha as string | null,
 			conflicts: JSON.parse(r.conflicts as string),
+			feedback: (r.feedback as string | null) ?? null,
+			reviews: (r.reviews as number) ?? 0,
 			createdAt: r.created_at as number,
 			updatedAt: r.updated_at as number,
 		};
@@ -135,7 +171,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 	private update(id: string, patch: Partial<Task>) {
 		const cols: Record<string, string> = {
 			status: "status", attempt: "attempt", fork: "fork", baseSha: "base_sha", headSha: "head_sha",
-			changed: "changed", blockedBy: "blocked_by", landedSha: "landed_sha", conflicts: "conflicts",
+			changed: "changed", blockedBy: "blocked_by", landedSha: "landed_sha", conflicts: "conflicts", feedback: "feedback", reviews: "reviews",
 		};
 		const sets: string[] = ["updated_at = ?"];
 		const vals: SqlStorageValue[] = [Date.now()];
@@ -150,7 +186,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 	// forked from main only after its blockers land — the conflict never happens.
 	async claim(input: { intent: string; claims: string[]; agent: string }): Promise<Assignment> {
 		const id = newId();
-		const blockers = this.tasks(`status IN ('working','queued','waiting')`).filter((t) => intersect(input.claims, t.claims).length);
+		const blockers = this.tasks(`status IN ('working','reviewing','queued','waiting')`).filter((t) => intersect(input.claims, t.claims).length);
 		const now = Date.now();
 		this.sql.exec(
 			`INSERT INTO tasks (id, intent, agent, claims, status, attempt, changed, blocked_by, conflicts, seq, created_at, updated_at)
@@ -198,9 +234,9 @@ export class RepoCoordinator extends DurableObject<Env> {
 		if (!head || head.hash === t.baseSha) throw new Error(`task ${id}: no commits on fork`);
 		const changed = t.baseSha ? await changedPaths(repo, t.baseSha, head.hash) : [];
 		const undeclared = changed.filter((p) => !intersect([p], t.claims).length);
-		this.update(id, { status: "queued", headSha: head.hash, changed });
-		this.log("task.queued", id, { head: head.hash, changed, undeclared });
-		this.kick();
+		this.update(id, { status: "reviewing", headSha: head.hash, changed });
+		this.log("task.reviewing", id, { head: head.hash, changed, undeclared });
+		this.ctx.waitUntil(this.review(id, undeclared).catch((e) => this.log("queue.error", id, { error: String(e) })));
 		return this.task(id);
 	}
 
@@ -209,6 +245,32 @@ export class RepoCoordinator extends DurableObject<Env> {
 		this.log("task.abandoned", id, {});
 		await this.wake();
 		return this.task(id);
+	}
+
+	// ---- review gate ----------------------------------------------------------
+
+	// A reviewer model checks the diff against the stated intent. Rejections
+	// re-fork the task with the review as feedback; a retry budget keeps
+	// a stubborn reviewer from looping forever.
+	private async review(id: string, undeclared: string[]) {
+		const t = this.task(id);
+		using repo = await this.env.ARTIFACTS.get(t.fork!);
+		const text = async (ref: string, path: string) => (await repo.readFile({ ref, path }))?.text() ?? "(absent)";
+		const diff = (
+			await Promise.all(t.changed.map(async (p) => `### ${p}\n--- before\n${await text(t.baseSha!, p)}\n--- after\n${await text(t.headSha!, p)}`))
+		).join("\n\n");
+		const verdict = await reviewDiff(this.env, t.intent, t.claims, undeclared, diff);
+		const reviews = t.reviews + 1;
+		if (this.task(id).status !== "reviewing") return; // abandoned meanwhile
+		this.log("task.reviewed", id, { ...verdict, round: reviews });
+		if (verdict.approve || reviews >= MAX_REVIEWS) {
+			this.update(id, { status: "queued", reviews });
+			this.log("task.queued", id, { changed: t.changed, overridden: !verdict.approve });
+			this.kick();
+		} else {
+			this.update(id, { status: "evicted", reviews, feedback: `Reviewer requested changes: ${verdict.comments}` });
+			await this.start(id);
+		}
 	}
 
 	// ---- the merge queue ----------------------------------------------------
@@ -239,7 +301,11 @@ export class RepoCoordinator extends DurableObject<Env> {
 				this.update(next.id, { status: "landed", landedSha: res.sha });
 				this.log("task.landed", next.id, { sha: res.sha, fastForward: res.fastForward, changed: next.changed });
 			} else {
-				this.update(next.id, { status: "evicted", conflicts: res.conflicts });
+				this.update(next.id, {
+					status: "evicted",
+					conflicts: res.conflicts,
+					feedback: `Your change conflicted with work that landed first on ${res.conflicts.join(", ") || "overlapping lines"}. Redo the intent on top of the new main and keep their changes.`,
+				});
 				this.log("task.evicted", next.id, { conflicts: res.conflicts });
 				// Agents are cheap to re-run: redo the intent on the new main.
 				await this.start(next.id);
@@ -250,7 +316,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 
 	// Start waiting tasks whose blockers have all finished.
 	private async wake() {
-		const live = new Set(this.tasks(`status IN ('working','queued','waiting')`).map((t) => t.id));
+		const live = new Set(this.tasks(`status IN ('working','reviewing','queued','waiting')`).map((t) => t.id));
 		for (const t of this.tasks(`status = 'waiting'`)) {
 			if (t.blockedBy.every((b) => !live.has(b))) await this.start(t.id);
 		}
