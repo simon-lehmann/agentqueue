@@ -4,6 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [{ "pattern": "agentqueue.simon-lehmann.com", "custom_domain": true }],
   "assets": { "directory": "./public", "run_worker_first": ["/p/*", "/health"] },
   "artifacts": [
     // remote: Artifacts has no local emulator; dev talks to the real service

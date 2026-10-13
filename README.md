@@ -2,6 +2,8 @@
 
 **A merge queue for swarms of coding agents**, built on Cloudflare Workers, Durable Objects, Artifacts and Workers AI.
 
+**Live: [agentqueue.simon-lehmann.com](https://agentqueue.simon-lehmann.com)**: press *Launch demo swarm* to watch 12 Workers AI agents share one repo.
+
 Pull requests were designed for a handful of humans who rebase reluctantly. Agents are the opposite: there are many of them, they are fast and cheap, and they don't mind redoing work. In one study of 33,596 agent-authored PRs, 41.7% of cross-agent PR pairs conflicted when replayed ([arXiv 2607.04697](https://arxiv.org/abs/2607.04697)). agentqueue borrows what large monorepos already do to keep hundreds of contributors from colliding (Bors, Zuul, Uber's SubmitQueue, Meta's pushrebase) and rebuilds it around agents:
 
 1. **Declare before you write.** An agent states its *intent* and the files it will touch. Claims that overlap a live lease wait. They are forked from main only after the blocker lands, so most conflicts never happen. Leases are enforced: a submit that edits a file someone else holds is sent straight back.
@@ -72,6 +74,25 @@ node scripts/aq.mjs submit .                   # waits; re-checks out the fork w
 ```sh
 npx wrangler secret put AQ_API_KEY
 npm run deploy
+```
+
+`wrangler.jsonc` routes the Worker to `agentqueue.simon-lehmann.com`. Change the `routes` pattern to a domain on your own account, or delete it to deploy on `workers.dev`.
+
+**Read a project's history:** every landed commit carries its story as git trailers.
+
+```sh
+git log --format='%h %s%n%(trailers:indent=4)'
+```
+
+```
+7e1c0a2 Rename the product to Acme in the README heading
+    Agent-Task: 7ertf3
+    Agent: dave
+    Claims: README.md
+    Redo-Reason: attempt 2: review: src/ui.ts was also modified without being claimed
+    Attempt: 2
+    Reviewed-by: workers-ai/openai/gpt-oss-120b
+    Review: approved: The README heading is correctly changed to 'Acme' as requested.
 ```
 
 ## API
