@@ -19,6 +19,18 @@ export function unifiedDiff(path: string, before: string | null, after: string |
 		.replace(/^=+\n/, "");
 }
 
+// Lines added and removed across unified patches (headers excluded).
+export function diffStat(patches: string[]) {
+	let added = 0, removed = 0;
+	for (const p of patches) {
+		for (const line of p.split("\n")) {
+			if (line.startsWith("+") && !line.startsWith("+++")) added++;
+			else if (line.startsWith("-") && !line.startsWith("---")) removed++;
+		}
+	}
+	return { added, removed };
+}
+
 // Pack per-file patches into model-sized chunks. A patch too big for one
 // chunk is split on line boundaries, each piece keeping its file header.
 export function chunkPatches(patches: string[]): string[] {

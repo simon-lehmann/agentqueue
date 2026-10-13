@@ -46,6 +46,8 @@ curl -X POST localhost:8799/p/demo-1/demo     # seeds a todo service, launches 1
 open "http://localhost:8799/?project=demo-1"
 ```
 
+**Large-scale demo:** the dashboard's second button (or `curl -X POST localhost:8799/p/demo-2/demo -H 'content-type: application/json' -d '{"kind":"scale"}'`) seeds a ~20k-line repo. Codemod agents then rewrite tens of thousands of lines (a rename across 121 files, a `var`→`const` pass that has to wait for it, an 80-file rewrite, and a docs agent that over-reaches and gets sent back), while Workers AI agents add small features. A typical run lands about +32k / −32k lines in two minutes. The header and every card show lines landed.
+
 **Scripted scenario** (real git clients; covers parallel lanes, a waiting lease, and review sending a task back for redo):
 
 ```sh

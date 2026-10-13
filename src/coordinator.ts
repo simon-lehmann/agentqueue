@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { changedPaths, intersect } from "./diff";
 import { Mirror } from "./mirror";
-import { REVIEW_MODEL, reviewChange, unifiedDiff, type Verdict } from "./review";
+import { REVIEW_MODEL, diffStat, reviewChange, unifiedDiff, type Verdict } from "./review";
 
 export type Status = "waiting" | "working" | "reviewing" | "queued" | "landed" | "evicted" | "abandoned" | "needs-human";
 // Statuses that hold a lease. An evicted task is between attempts and keeps
@@ -26,6 +26,8 @@ export interface Task {
 	conflicts: string[];
 	feedback: string | null; // why the current attempt exists: conflict or review notes
 	reviews: number;
+	added: number; // lines, from the last reviewed diff
+	removed: number;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -57,7 +59,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 			id TEXT PRIMARY KEY, intent TEXT, agent TEXT, claims TEXT, status TEXT, attempt INTEGER,
 			fork TEXT, base_sha TEXT, head_sha TEXT, changed TEXT, blocked_by TEXT, landed_sha TEXT,
 			conflicts TEXT, seq INTEGER, created_at INTEGER, updated_at INTEGER)`);
-		for (const col of ["feedback TEXT", "reviews INTEGER DEFAULT 0"]) {
+		for (const col of ["feedback TEXT", "reviews INTEGER DEFAULT 0", "added INTEGER DEFAULT 0", "removed INTEGER DEFAULT 0"]) {
 			try {
 				this.sql.exec(`ALTER TABLE tasks ADD COLUMN ${col}`);
 			} catch {} // already present
@@ -132,6 +134,8 @@ export class RepoCoordinator extends DurableObject<Env> {
 			conflicts: JSON.parse(r.conflicts as string),
 			feedback: (r.feedback as string | null) ?? null,
 			reviews: (r.reviews as number) ?? 0,
+			added: (r.added as number) ?? 0,
+			removed: (r.removed as number) ?? 0,
 			createdAt: r.created_at as number,
 			updatedAt: r.updated_at as number,
 		};
@@ -150,7 +154,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 	private update(id: string, patch: Partial<Task>) {
 		const cols: Record<string, string> = {
 			status: "status", attempt: "attempt", fork: "fork", baseSha: "base_sha", headSha: "head_sha",
-			changed: "changed", blockedBy: "blocked_by", landedSha: "landed_sha", conflicts: "conflicts", feedback: "feedback", reviews: "reviews",
+			changed: "changed", blockedBy: "blocked_by", landedSha: "landed_sha", conflicts: "conflicts", feedback: "feedback", reviews: "reviews", added: "added", removed: "removed",
 		};
 		const sets: string[] = ["updated_at = ?"];
 		const vals: SqlStorageValue[] = [Date.now()];
@@ -308,6 +312,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 			using repo = await this.env.ARTIFACTS.get(t.fork!);
 			const text = async (ref: string, path: string) => (await repo.readFile({ ref, path }))?.text() ?? null;
 			const patches = await Promise.all(t.changed.map(async (p) => unifiedDiff(p, await text(t.baseSha!, p), await text(t.headSha!, p))));
+			this.update(id, diffStat(patches));
 			verdict = await reviewChange(this.env, t.intent, t.claims, undeclared, patches);
 		} catch (e) {
 			// Fail closed but never wedge: a broken review parks the task and frees its lease.
@@ -359,7 +364,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 			});
 			if (res.ok) {
 				this.update(next.id, { status: "landed", landedSha: res.sha });
-				this.log("task.landed", next.id, { sha: res.sha, fastForward: res.fastForward, changed: next.changed });
+				this.log("task.landed", next.id, { sha: res.sha, fastForward: res.fastForward, changed: next.changed, added: next.added, removed: next.removed });
 				this.dropFork(next.fork!);
 			} else {
 				this.update(next.id, {
@@ -405,6 +410,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 			if (e.type === "task.queued" && e.data.approvedBy === "human") human = true;
 		}
 		out.push(`Attempt: ${t.attempt}`);
+		if (t.added || t.removed) out.push(`Diff-Stat: ${t.changed.length} files, +${t.added} -${t.removed}`);
 		if (review) {
 			out.push(`Reviewed-by: ${REVIEW_MODEL.replace("@cf/", "workers-ai/")}${review.chunks > 1 ? ` (${review.chunks} chunks)` : ""}`);
 			out.push(`Review: ${review.approve === true ? "approved" : review.approve === false ? "changes requested" : "no verdict"}: ${one(review.comments)}`);
@@ -462,10 +468,10 @@ export class RepoCoordinator extends DurableObject<Env> {
 	}
 
 	// Launch Workers AI agents, one Durable Object each, on a list of goals.
-	async swarm(goals: { agent: string; goal: string }[]) {
+	async swarm(goals: { agent: string; goal: string; codemod?: string }[]) {
 		for (const g of goals) {
 			const stub = this.env.AGENT.get(this.env.AGENT.idFromName(`${this.project}/${g.agent}/${crypto.randomUUID()}`));
-			await stub.begin(this.project, g.agent, g.goal);
+			await stub.begin(this.project, g.agent, g.goal, g.codemod);
 		}
 		this.log("swarm.launched", null, { agents: goals.map((g) => g.agent) });
 		return { launched: goals.length };

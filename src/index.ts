@@ -1,6 +1,6 @@
 export { RepoCoordinator } from "./coordinator";
 export { SwarmAgent } from "./agent";
-import { DEMO_GOALS, DEMO_SEED } from "./demo";
+import { DEMO_GOALS, DEMO_SEED, SCALE_GOALS, scaleSeed } from "./demo";
 
 const NAME = /^[a-z0-9][a-z0-9-]{1,30}$/;
 
@@ -42,8 +42,10 @@ export default {
 				// "~" can't appear in a project name, so this instance never collides with a real project.
 				const budget = env.COORDINATOR.get(env.COORDINATOR.idFromName("~demo-budget"));
 				if (!(await budget.spendDemo(Number(env.DEMO_DAILY_LIMIT) || 40))) return Response.json({ error: "today's demo budget is used up; run it locally or try tomorrow" }, { status: 429 });
-				await coord.init(project, { seed: DEMO_SEED });
-				return Response.json(await coord.swarm(DEMO_GOALS));
+				// kind "scale": a ~20k-line repo with codemod agents rewriting thousands of lines each.
+				const scale = body.kind === "scale";
+				await coord.init(project, { seed: scale ? scaleSeed() : DEMO_SEED });
+				return Response.json(await coord.swarm(scale ? SCALE_GOALS : DEMO_GOALS));
 			}
 			if (rest === "/tasks" && req.method === "POST") {
 				if (!body.intent || !Array.isArray(body.claims)) return Response.json({ error: "intent and claims[] required" }, { status: 400 });

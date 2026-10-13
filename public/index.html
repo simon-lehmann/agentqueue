@@ -113,6 +113,26 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
 .badge.landing { background: var(--violet-soft); color: var(--violet); }
 .badge.ff { background: var(--green-soft); color: var(--green); }
 .badge.abandoned { background: var(--panel-2); color: var(--muted); }
+.badge.diff { background: var(--panel-2); color: var(--muted); font-family: var(--mono); font-weight: 600; }
+.badge.diff .a, .stat .a { color: var(--green); } .badge.diff .r, .stat .r { color: var(--red); }
+.stat.lines { min-width: 150px; }
+.stat.lines b { white-space: nowrap; }
+.stat.lines b .r { font-size: 14px; font-weight: 600; margin-left: 4px; }
+.howlink { color: var(--muted); font-size: 13px; text-decoration: none; white-space: nowrap; }
+.howlink:hover { color: var(--accent); }
+.launch .btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.btn.alt { background: var(--text); color: var(--bg); }
+.picker .choice { display: block; width: 100%; text-align: left; margin: 0 0 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; font: inherit; }
+.picker .choice:hover { border-color: var(--accent); }
+.picker .choice b { display: block; font-size: 14.5px; }
+.picker .choice span { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.picker .choice.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.picker .choice.primary span { color: rgba(255,255,255,.85); }
+.picker .how { display: block; text-align: center; margin: 6px 0 14px; color: var(--accent); font-weight: 600; font-size: 14px; text-decoration: none; }
+.picker details { border-top: 1px solid var(--line); padding-top: 12px; }
+.picker summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.picker details p { margin: 8px 0; font-size: 12.5px; }
+@media (max-width: 480px) { .picker form { width: calc(100vw - 32px); padding: 20px; } }
 .card .intent { margin: 6px 0 7px; font-size: 13px; line-height: 1.35; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--panel-2); color: var(--muted); border: 1px solid transparent; }
@@ -249,7 +269,9 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     <div class="stat waiting"><b id="s-waiting">0</b><span>Waiting</span></div>
     <div class="stat landed"><b id="s-landed">0</b><span>Landed</span></div>
     <div class="stat evicted"><b id="s-evicted">0</b><span title="Evictions on conflict plus reviewer-requested changes">Redos</span></div>
+    <div class="stat lines"><b id="s-lines"><span class="a">+0</span></b><span title="Lines added and removed by everything that has landed on main">Lines landed</span></div>
   </div>
+  <a class="howlink" href="/how">How it works →</a>
   <div class="conn" id="conn"><i></i><span>connecting</span></div>
 </header>
 
@@ -305,6 +327,8 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
   if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
 
   const $ = (s, el = document) => el.querySelector(s);
+  const big = (n) => (n >= 10000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + "k" : n.toLocaleString());
+  const diffBadge = (a, r) => (a || r ? `<span class="badge diff" title="${(a || 0).toLocaleString()} lines added, ${(r || 0).toLocaleString()} removed"><span class="a">+${big(a || 0)}</span> <span class="r">−${big(r || 0)}</span></span>` : "");
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   if (!project) {
@@ -312,14 +336,17 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     document.querySelector("header").remove();
     const d = document.createElement("div");
     d.className = "picker";
-    d.innerHTML = `<form><h1>agentqueue</h1><p>A merge queue for swarms of coding agents, on Cloudflare Workers, Durable Objects and Artifacts.</p>
-      <button type="button" class="btn" data-demo style="width:100%;margin:0 0 18px">Launch a demo swarm</button>
-      <p style="margin-bottom:8px;font-size:12.5px">Or open an existing project:</p>
+    d.innerHTML = `<form><h1>agentqueue</h1><p>A merge queue for swarms of coding agents, on Cloudflare Workers, Durable Objects, Artifacts and Workers AI.</p>
+      <button type="button" class="choice primary" data-demo="swarm"><b>Launch a demo swarm</b><span>12 Workers AI agents with overlapping goals share one small repo</span></button>
+      <button type="button" class="choice" data-demo="scale"><b>Launch the large-scale demo</b><span>Codemod agents rewrite ~40,000 lines in a 20k-line repo while AI agents add features</span></button>
+      <a class="how" href="/how">How it works →</a>
+      <details><summary>Open an existing project by name</summary>
+      <p>Every project has a live board. Use this to watch one you drive from the <code>aq</code> CLI, or to reopen an earlier demo.</p>
       <input name="p" placeholder="project name" pattern="[a-z0-9][a-z0-9-]{1,30}" required>
-      <button class="btn ghost">Open board</button></form>`;
+      <button class="btn ghost">Open board</button></details></form>`;
     document.body.append(d);
     d.querySelector("form").onsubmit = (e) => { e.preventDefault(); location.search = "?project=" + encodeURIComponent(e.target.p.value.trim()); };
-    d.querySelector("[data-demo]").onclick = () => { location.search = `?project=demo-${Date.now().toString(36)}&launch=1`; };
+    d.querySelectorAll("[data-demo]").forEach((b) => (b.onclick = () => { location.search = `?project=demo-${Date.now().toString(36)}&launch=${b.dataset.demo}`; }));
     return;
   }
 
@@ -394,6 +421,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     if (t.status === "queued" && landing.has(t.id)) badges.push(`<span class="badge landing"><span class="spin" style="width:8px;height:8px;border-width:1.5px;vertical-align:-1px"></span> landing</span>`);
     if (t.status === "abandoned") badges.push(`<span class="badge abandoned">abandoned</span>`);
     if (t.status === "needs-human") badges.push(`<span class="badge abandoned" style="color:var(--amber)" title="Review budget spent; waiting for a human to approve or abandon">needs human</span>`);
+    if (t.added || t.removed) badges.push(diffBadge(t.added, t.removed));
     if (t.status === "landed" && t.landedSha) badges.push(`<span class="badge ff mono" style="font-size:10.5px">${short(t.landedSha)}</span>`);
 
     let meta = "";
@@ -488,7 +516,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
           if (!launchEl) {
             launchEl = document.createElement("div");
             launchEl.className = "empty launch";
-            launchEl.innerHTML = `<button class="btn" data-launch>Launch demo swarm</button><p>Seeds this project's main repo and starts 12 Workers AI agents on it.</p>`;
+            launchEl.innerHTML = `<div class="btns"><button class="btn" data-launch="swarm">Launch demo swarm</button><button class="btn alt" data-launch="scale">Large-scale demo</button></div><p>Demo swarm: 12 Workers AI agents on a small repo. Large-scale: codemod agents rewriting ~40k lines alongside AI agents.</p>`;
           }
           e = launchEl;
         } else {
@@ -531,6 +559,10 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
     $("#s-waiting").textContent = n("waiting");
     $("#s-landed").textContent = n("landed");
     $("#s-evicted").textContent = ts.reduce((a, t) => a + Math.max(0, t.attempt - 1), 0);
+    const landed = ts.filter((t) => t.status === "landed");
+    const add = landed.reduce((a, t) => a + (t.added || 0), 0), rem = landed.reduce((a, t) => a + (t.removed || 0), 0);
+    $("#s-lines").innerHTML = `<span class="a">+${big(add)}</span><span class="r">−${big(rem)}</span>`;
+    $("#s-lines").title = `${add.toLocaleString()} lines added, ${rem.toLocaleString()} removed across ${landed.length} landed tasks`;
     $("#premote").textContent = state.mainRemote || "";
   }
 
@@ -542,7 +574,8 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
         const m = /Agent-Task:\s*(\S+)/.exec(c.message || "");
         const t = m && byId.get(m[1]);
         const redos = (c.message || "").match(/^Redo-Reason:/gm)?.length || 0;
-        return { hash: c.hash, msg: (c.message || "").split("\n")[0], full: c.message || "", redos, agent: c.author?.name || t?.agent || "", task: m?.[1], ts: (c.committedAt || 0) * 1000 };
+        const ds = /^Diff-Stat: .*\+(\d+) -(\d+)/m.exec(c.message || "");
+        return { hash: c.hash, msg: (c.message || "").split("\n")[0], full: c.message || "", redos, added: ds ? +ds[1] : 0, removed: ds ? +ds[2] : 0, agent: c.author?.name || t?.agent || "", task: m?.[1], ts: (c.committedAt || 0) * 1000 };
       });
     } else {
       list = state.tasks.filter((t) => t.status === "landed" && t.landedSha)
@@ -558,7 +591,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
       return `<div class="commit${isNew ? " enter" : ""}" style="--agent:${col}"${c.full ? ` title="${esc(c.full)}"` : ""}>
         <div class="node"><i></i></div>
         <div><div class="msg">${esc(c.msg)}${i === 0 ? `<span class="headtag">HEAD</span>` : ""}</div>
-        <div class="sub"><span class="sha">${short(c.hash)}</span><span>${esc(c.agent)}</span>${c.task ? `<span class="mono" style="font-size:11px">Agent-Task: ${esc(c.task)}</span>` : ""}${c.redos ? `<span class="badge redo" title="Redo-Reason trailers on this commit">redo ×${c.redos}</span>` : ""}<span style="margin-left:auto">${c.ts ? ago(c.ts) : ""}</span></div></div>
+        <div class="sub"><span class="sha">${short(c.hash)}</span><span>${esc(c.agent)}</span>${c.task ? `<span class="mono" style="font-size:11px">Agent-Task: ${esc(c.task)}</span>` : ""}${diffBadge(c.added, c.removed)}${c.redos ? `<span class="badge redo" title="Redo-Reason trailers on this commit">redo ×${c.redos}</span>` : ""}<span style="margin-left:auto">${c.ts ? ago(c.ts) : ""}</span></div></div>
       </div>`;
     }).join("");
     for (const c of list) seenCommits.add(c.hash);
@@ -723,15 +756,15 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
 
   // One-click demo: seed this project's main and launch the Workers AI swarm.
   let launching = false;
-  async function launch() {
+  async function launch(kind = "swarm") {
     if (launching) return;
     // Demos only run in throwaway "demo-*" projects; anywhere else, open a fresh one.
-    if (!project.startsWith("demo-")) { location.search = `?project=demo-${Date.now().toString(36)}&launch=1`; return; }
+    if (!project.startsWith("demo-")) { location.search = `?project=demo-${Date.now().toString(36)}&launch=${kind}`; return; }
     launching = true;
     document.querySelectorAll(".launch .err").forEach((e) => e.remove());
     document.querySelectorAll("[data-launch]").forEach((b) => { b.disabled = true; b.textContent = "Seeding main and launching agents…"; });
     try {
-      const r = await fetch(base + "/demo", { method: "POST" });
+      const r = await fetch(base + "/demo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind }) });
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
         throw new Error(
@@ -742,15 +775,16 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 16px; pa
       }
     } catch (err) {
       launching = false;
-      document.querySelectorAll("[data-launch]").forEach((b) => { b.disabled = false; b.textContent = "Launch demo swarm"; b.insertAdjacentHTML("afterend", `<div class="err">${esc(err.message)}</div>`); });
+      document.querySelectorAll("[data-launch]").forEach((b) => { b.disabled = false; b.textContent = b.dataset.launch === "scale" ? "Large-scale demo" : "Launch demo swarm"; });
+      document.querySelector(".launch .btns")?.insertAdjacentHTML("afterend", `<div class="err">${esc(err.message)}</div>`);
     }
     if (params.get("launch")) { params.delete("launch"); history.replaceState(null, "", "?" + params); }
     refresh();
   }
-  document.addEventListener("click", (e) => { if (e.target.closest("[data-launch]")) launch(); });
+  document.addEventListener("click", (e) => { const b = e.target.closest("[data-launch]"); if (b) launch(b.dataset.launch); });
   setInterval(() => document.querySelectorAll(".when[data-ts]").forEach((el) => (el.textContent = ago(+el.dataset.ts))), 5000);
 
-  refresh().then(() => { if (params.get("launch") && state && !state.tasks.length) launch(); });
+  refresh().then(() => { if (params.get("launch") && state && !state.tasks.length) launch(params.get("launch") === "scale" ? "scale" : "swarm"); });
   connect();
 })();
 </script>

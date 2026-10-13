@@ -2,15 +2,20 @@ import { DurableObject } from "cloudflare:workers";
 import git from "isomorphic-git";
 import http from "isomorphic-git/http/web";
 import type { Assignment } from "./coordinator";
+import { CODEMODS } from "./demo";
+import { intersect } from "./diff";
 import { MemoryFS } from "./memfs";
 
 const MODEL = "@cf/openai/gpt-oss-120b";
 const POLL_MS = 1500;
+// Beyond the claimed files, how much of the repo an LLM agent reads for context.
+const CONTEXT_CHARS = 60_000;
 
 interface AgentState {
 	project: string;
 	name: string;
 	goal: string;
+	codemod?: string; // scripted large refactor instead of an LLM edit
 	taskId: string | null;
 	doneAttempt: number; // last attempt we pushed
 	finished: boolean;
@@ -30,8 +35,8 @@ export class SwarmAgent extends DurableObject<Env> {
 		return this.env.COORDINATOR.get(this.env.COORDINATOR.idFromName(project));
 	}
 
-	async begin(project: string, name: string, goal: string) {
-		const s: AgentState = { project, name, goal, taskId: null, doneAttempt: 0, finished: false };
+	async begin(project: string, name: string, goal: string, codemod?: string) {
+		const s: AgentState = { project, name, goal, codemod: codemod && CODEMODS[codemod] ? codemod : undefined, taskId: null, doneAttempt: 0, finished: false };
 		await this.save(s);
 		await this.ctx.storage.setAlarm(Date.now() + 10);
 	}
@@ -50,8 +55,8 @@ export class SwarmAgent extends DurableObject<Env> {
 	private async step(s: AgentState) {
 		const coord = this.coord(s.project);
 		if (!s.taskId) {
-			const files = await coord.listFiles();
-			const plan = await this.plan(s.goal, files);
+			const mod = s.codemod && CODEMODS[s.codemod];
+			const plan = mod ? { intent: mod.intent, claims: mod.claims } : await this.plan(s.goal, await coord.listFiles());
 			const a = await coord.claim({ intent: plan.intent, claims: plan.claims, agent: s.name });
 			s.taskId = a.task.id;
 			await this.save(s);
@@ -74,10 +79,28 @@ export class SwarmAgent extends DurableObject<Env> {
 		await git.clone({ fs, http, dir, url: a.remote!, singleBranch: true, depth: 1, onAuth: auth });
 		const paths = (await git.listFiles({ fs, dir })).filter((p) => !p.startsWith("."));
 		const read = async (p: string) => (await fs.promises.readFile(`${dir}/${p}`, "utf8")) as string;
-		const context: Record<string, string> = {};
-		for (const p of paths) context[p] = await read(p);
 
-		const edits = await this.edit(a.task.intent, a.task.claims, context, a.task.attempt > 1 ? a.task.feedback : null);
+		let edits: Record<string, string>;
+		const mod = s.codemod && CODEMODS[s.codemod];
+		if (mod) {
+			const all: Record<string, string> = {};
+			for (const p of paths) all[p] = await read(p);
+			edits = mod.apply(all, a.task.attempt);
+		} else {
+			// Claimed files in full, then as much of the rest as fits; big repos
+			// don't fit in a model context, and the agent mostly needs its claims.
+			const context: Record<string, string> = {};
+			let budget = CONTEXT_CHARS;
+			const claimed = paths.filter((p) => intersect([p], a.task.claims).length);
+			for (const p of claimed) context[p] = await read(p);
+			for (const p of paths.filter((p) => !claimed.includes(p))) {
+				const body = await read(p);
+				if (body.length > budget) continue;
+				context[p] = body;
+				budget -= body.length;
+			}
+			edits = await this.edit(a.task.intent, a.task.claims, context, a.task.attempt > 1 ? a.task.feedback : null);
+		}
 		for (const [p, body] of Object.entries(edits)) {
 			await fs.promises.writeFile(`${dir}/${p}`, body);
 			await git.add({ fs, dir, filepath: p });
