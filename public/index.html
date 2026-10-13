@@ -77,7 +77,7 @@ header {
 
 /* ---------- layout ---------- */
 main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px 24px 24px; height: calc(100vh - 71px); }
-.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; min-height: 0; }
+.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; min-height: 0; }
 .side { display: grid; grid-template-rows: minmax(0, 1.15fr) minmax(0, .8fr) minmax(0, 1fr); gap: 12px; min-height: 0; }
 
 .lane, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; min-height: 0; }
@@ -88,6 +88,7 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .lane[data-lane="waiting"] .dot { background: var(--amber); }
 .lane[data-lane="working"] .dot { background: var(--blue); }
+.lane[data-lane="reviewing"] .dot { background: var(--accent); }
 .lane[data-lane="queued"] .dot { background: var(--violet); }
 .lane[data-lane="landed"] .dot { background: var(--green); }
 .lane-body, .panel-body { padding: 10px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -181,7 +182,28 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
 .ic.landed { background: var(--green-soft); color: var(--green); }
 .ic.evicted, .ic.error { background: var(--red-soft); color: var(--red); }
 .ic.redo { background: var(--red-soft); color: var(--red); }
-.ic.created { background: var(--accent-soft); color: var(--accent); }
+.ic.created, .ic.reviewing { background: var(--accent-soft); color: var(--accent); }
+.ic.reviewed { background: var(--panel-2); color: var(--muted); }
+.ic.note, .ic.abandoned { background: var(--panel-2); color: var(--faint); }
+.ev.note { opacity: .75; font-size: 12px; }
+.verdict { font-weight: 700; padding: 0 6px; border-radius: 5px; }
+.verdict.ok { color: var(--green); background: var(--green-soft); }
+.verdict.no { color: var(--amber); background: var(--amber-soft); }
+.quote { margin-top: 3px; padding: 4px 8px; border-left: 3px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.4; }
+.review { margin-top: 8px; padding: 6px 8px; border-radius: 8px; font-size: 12px; line-height: 1.4; }
+.review.ok { background: var(--green-soft); color: var(--green); }
+.review.no { background: var(--amber-soft); color: var(--amber); }
+.review b { font-weight: 700; }
+.review span { color: var(--text); opacity: .85; }
+.feedback { margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: var(--red-soft); color: var(--red); font-size: 12px; line-height: 1.4; }
+.feedback b { font-weight: 700; }
+.feedback span { color: var(--text); opacity: .85; }
+.card.status-reviewing { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.launch { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 16px; border: 1.5px dashed var(--accent); border-radius: 12px; background: var(--accent-soft); text-align: center; }
+.launch p { margin: 0; color: var(--muted); font-size: 12.5px; }
+.btn { border: 0; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 650; font-size: 14px; padding: 10px 18px; cursor: pointer; font-family: inherit; }
+.btn:disabled { opacity: .6; cursor: progress; }
+.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
 
 /* ---------- picker ---------- */
 .picker { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); }
@@ -241,9 +263,14 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
         <div class="d">Each agent owns a private Artifacts fork of main and holds a lease on its claims.</div></div>
       <div class="lane-body"></div>
     </div>
+    <div class="lane" data-lane="reviewing">
+      <div class="lane-head"><div class="t"><span class="dot"></span>Review<span class="count">0</span></div>
+        <div class="d">A reviewer agent checks the fork's diff against the stated intent.</div></div>
+      <div class="lane-body"></div>
+    </div>
     <div class="lane" data-lane="queued">
       <div class="lane-head"><div class="t"><span class="dot"></span>Merge queue<span class="count">0</span></div>
-        <div class="d">Submitted forks, diffed in place. The coordinator is the single writer of main.</div></div>
+        <div class="d">Approved forks. The coordinator is the single writer of main.</div></div>
       <div class="lane-body"></div>
     </div>
     <div class="lane" data-lane="landed">
@@ -283,11 +310,14 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
     document.querySelector("header").remove();
     const d = document.createElement("div");
     d.className = "picker";
-    d.innerHTML = `<form><h1>agentqueue</h1><p>Open the live board for a project.</p>
-      <input name="p" placeholder="project name, e.g. demo" autofocus pattern="[a-z0-9][a-z0-9-]{1,30}" required>
-      <button>Open board</button></form>`;
+    d.innerHTML = `<form><h1>agentqueue</h1><p>A merge queue for swarms of coding agents, on Cloudflare Workers, Durable Objects and Artifacts.</p>
+      <button type="button" class="btn" data-demo style="width:100%;margin:0 0 18px">Launch a demo swarm</button>
+      <p style="margin-bottom:8px;font-size:12.5px">Or open an existing project:</p>
+      <input name="p" placeholder="project name" pattern="[a-z0-9][a-z0-9-]{1,30}" required>
+      <button class="btn ghost">Open board</button></form>`;
     document.body.append(d);
     d.querySelector("form").onsubmit = (e) => { e.preventDefault(); location.search = "?project=" + encodeURIComponent(e.target.p.value.trim()); };
+    d.querySelector("[data-demo]").onclick = () => { location.search = `?project=demo-${Date.now().toString(36)}&launch=1`; };
     return;
   }
 
@@ -348,7 +378,8 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
   const landedInfo = new Map();
   const flashes = new Map(); // task id -> class
 
-  const laneOf = (t) => ({ waiting: "waiting", working: "working", evicted: "working", queued: "queued", landed: "landed", abandoned: "landed" }[t.status] || "working");
+  const laneOf = (t) => ({ waiting: "waiting", working: "working", evicted: "working", reviewing: "reviewing", queued: "queued", landed: "landed", abandoned: "landed" }[t.status] || "working");
+  const lastReview = new Map(); // task id -> latest task.reviewed data for its current attempt
 
   // ---- rendering: task cards with FLIP transitions between lanes ----
   const cards = new Map();
@@ -379,9 +410,23 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
       const und = new Set(undeclared.get(t.id) || []);
       meta += `<div class="row"><span class="k">changed</span><span class="chips">${t.changed.map((p) => `<span class="chip ${und.has(p) ? "undeclared" : "changed"}" title="${und.has(p) ? "Outside the task's claims" : "Changed"}">${esc(p)}</span>`).join("")}</span></div>`;
     }
-    if (isRedo && t.conflicts?.length && t.status !== "landed") {
+    if (isRedo && t.conflicts?.length && t.status !== "landed" && !t.feedback) {
       meta += `<div class="row"><span class="k">conflict</span><span class="chips">${t.conflicts.map((p) => `<span class="chip conflict">${esc(p)}</span>`).join("")}</span></div>`;
     }
+    let extra = "";
+    if (isRedo && t.feedback && t.status !== "landed" && t.status !== "abandoned") {
+      extra += `<div class="feedback"><b>Why attempt ${t.attempt}:</b> <span>${esc(t.feedback)}</span></div>`;
+    }
+    const rv = lastReview.get(t.id);
+    if (rv && (t.status === "reviewing" || t.status === "queued" || t.status === "working")) {
+      extra += rv.approve
+        ? `<div class="review ok"><b>✓ Approved</b>${rv.comments ? ` <span>${esc(rv.comments)}</span>` : ""}</div>`
+        : `<div class="review no"><b>Changes requested</b>${rv.comments ? ` <span>${esc(rv.comments)}</span>` : ""}</div>`;
+    }
+    if (t.status === "reviewing" && !rv) {
+      extra += `<div class="review ok" style="background:var(--accent-soft);color:var(--accent)"><span class="spin" style="width:8px;height:8px;border-width:1.5px;vertical-align:-1px"></span> <b>Reviewer reading the diff…</b></div>`;
+    }
+    if (t.reviews > 1 && t.status !== "landed") badges.push(`<span class="badge landing" title="Review rounds">review ×${t.reviews}</span>`);
 
     if (t.status === "landed" || t.status === "abandoned") {
       return `<div class="top"><span class="avatar">${initial(t.agent)}</span><span class="agent">${esc(t.agent)}</span><span class="id">#${esc(t.id)}</span><span class="badges">${badges.join("")}</span></div>
@@ -390,13 +435,13 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
     return `<div class="top"><span class="avatar">${initial(t.agent)}</span><span class="agent">${esc(t.agent)}</span><span class="id">#${esc(t.id)}</span><span class="badges">${badges.join("")}</span></div>
       <div class="intent">${esc(t.intent)}</div>
       <div class="chips">${(t.claims || []).map((c) => `<span class="chip claim" title="Claimed">${esc(c)}</span>`).join("")}</div>
-      ${meta ? `<div class="meta">${meta}</div>` : ""}`;
+      ${meta ? `<div class="meta">${meta}</div>` : ""}${extra}`;
   }
 
   function renderBoard() {
     const tasks = state.tasks;
     const byId = new Map(tasks.map((t) => [t.id, t]));
-    const lanes = { waiting: [], working: [], queued: [], landed: [] };
+    const lanes = { waiting: [], working: [], reviewing: [], queued: [], landed: [] };
     for (const t of tasks) lanes[laneOf(t)].push(t);
     // newest landings at top of landed lane; queue in FIFO order
     lanes.landed.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -432,8 +477,13 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
       });
       if (!list.length) {
         const e = document.createElement("div");
-        e.className = "empty";
-        e.textContent = { waiting: "No blocked tasks", working: "No agents working", queued: "Queue empty", landed: "Nothing landed yet" }[lane];
+        if (lane === "working" && !tasks.length) {
+          e.className = "empty launch";
+          e.innerHTML = `<button class="btn" data-launch>Launch demo swarm</button><p>Seeds this project's main repo and starts 8 Workers AI agents on it.</p>`;
+        } else {
+          e.className = "empty";
+          e.textContent = { waiting: "No blocked tasks", working: "No agents working", reviewing: "Nothing in review", queued: "Queue empty", landed: "Nothing landed yet" }[lane];
+        }
         body.append(e);
       }
     }
@@ -466,7 +516,7 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
   function renderStats() {
     const ts = state.tasks;
     const n = (s) => ts.filter((t) => t.status === s).length;
-    $("#s-working").textContent = n("working") + n("evicted");
+    $("#s-working").textContent = n("working") + n("evicted") + n("reviewing");
     $("#s-waiting").textContent = n("waiting");
     $("#s-landed").textContent = n("landed");
     $("#s-evicted").textContent = state.events.filter((e) => e.type === "task.evicted").length || ts.reduce((a, t) => a + Math.max(0, t.attempt - 1), 0);
@@ -526,18 +576,26 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
       </div></div>`).join("");
   }
 
+  const files = (n) => `${n || 0} file${n === 1 ? "" : "s"}`;
+  const outside = (e) => (e.data.undeclared?.length ? ` · <span style="color:var(--amber)">${e.data.undeclared.length} outside claims</span>` : "");
   const EV = {
-    "project.created": ["created", "✦", () => `Project created with a fresh <b>main</b> repo`],
-    "task.claimed": ["claimed", "＋", (e, a) => `${a} claimed ${(e.data.claims || []).map((c) => `<code>${esc(c)}</code>`).join(", ")}`],
-    "task.waiting": ["waiting", "⏸", (e, a, n) => `${a} waits on ${(e.data.blockedBy || []).map(n).join(", ")} (lease overlap)`],
-    "task.started": ["started", "⑂", (e, a) => `${a} forked main @ <code>${short(e.data.base)}</code>`],
-    "task.redo": ["redo", "↻", (e, a) => `${a} redoes intent on new main @ <code>${short(e.data.base)}</code> (attempt ${e.data.attempt})`],
-    "task.queued": ["queued", "→", (e, a) => `${a} submitted ${e.data.changed?.length || 0} file${e.data.changed?.length === 1 ? "" : "s"}${e.data.undeclared?.length ? ` · <span style="color:var(--amber)">${e.data.undeclared.length} outside claims</span>` : ""}`],
-    "task.landing": ["landing", "⧗", (e, a) => `Merging ${a} onto main`],
-    "task.landed": ["landed", "✓", (e, a) => `${a} landed <code>${short(e.data.sha)}</code>`],
-    "task.evicted": ["evicted", "✕", (e, a) => `${a} evicted: conflict on ${(e.data.conflicts || []).map((c) => `<code>${esc(c)}</code>`).join(", ") || "merge"}`],
-    "task.abandoned": ["claimed", "–", (e, a) => `${a} abandoned the task`],
-    "queue.error": ["error", "!", (e) => `Queue error: ${esc(String(e.data.error || "").slice(0, 120))}`],
+    "project.created": ["created", () => `Project created with a fresh <b>main</b> repo`],
+    "swarm.launched": ["created", (e) => `Swarm launched: <b>${(e.data.agents || []).length} agents</b>`],
+    "task.claimed": ["claimed", (e, a) => `${a} claimed ${(e.data.claims || []).map((c) => `<code>${esc(c)}</code>`).join(", ")}`],
+    "task.waiting": ["waiting", (e, a, n) => `${a} waits on ${(e.data.blockedBy || []).map(n).join(", ")} (lease overlap)`],
+    "task.started": ["started", (e, a) => `${a} forked main @ <code>${short(e.data.base)}</code>`],
+    "task.redo": ["redo", (e, a) => `${a} redoes its intent on main @ <code>${short(e.data.base)}</code> (attempt ${e.data.attempt})`],
+    "task.reviewing": ["reviewing", (e, a) => `${a} submitted ${files(e.data.changed?.length)} for review${outside(e)}`],
+    "task.reviewed": ["reviewed", (e, a) => e.data.approve
+      ? `<span class="verdict ok">Reviewer approved</span> ${a}${e.data.comments ? `<div class="quote">${esc(e.data.comments)}</div>` : ""}`
+      : `<span class="verdict no">Changes requested</span> on ${a}${e.data.comments ? `<div class="quote">${esc(e.data.comments)}</div>` : ""}`],
+    "task.queued": ["queued", (e, a) => `${a} entered the merge queue${e.data.overridden ? ` <span style="color:var(--amber)">(retry budget spent)</span>` : ""}${e.data.changed ? ` · ${files(e.data.changed.length)}` : ""}${outside(e)}`],
+    "task.landing": ["landing", (e, a) => `Merging ${a} onto main`],
+    "task.landed": ["landed", (e, a) => `${a} landed <code>${short(e.data.sha)}</code>`],
+    "task.evicted": ["evicted", (e, a) => `${a} evicted: conflict on ${(e.data.conflicts || []).map((c) => `<code>${esc(c)}</code>`).join(", ") || "merge"}`],
+    "task.abandoned": ["abandoned", (e, a) => `${a} abandoned the task`],
+    "agent.note": ["note", (e, a) => `<span style="color:var(--muted)">${a}: ${esc(String(e.data.message || "").slice(0, 160))}</span>`],
+    "queue.error": ["error", (e) => `Queue error: ${esc(String(e.data.error || "").slice(0, 120))}`],
   };
 
   function renderEvents() {
@@ -549,10 +607,12 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
     };
     const el = $("#events");
     el.innerHTML = state.events.slice(0, 120).map((e) => {
-      const [cls, ic, fn] = EV[e.type] || ["claimed", "·", () => esc(e.type)];
+      const [cls, fn] = EV[e.type] || ["note", () => esc(e.type)];
+      const icCls = e.type === "task.reviewed" ? (e.data.approve ? "landed" : "waiting") : cls;
+      const ic = e.type === "task.reviewed" ? (e.data.approve ? ICON.landed : ICON.redo) : ICON[cls] || ICON.claimed;
       const key = `${e.ts}|${e.type}|${e.task}`;
       const isNew = !firstRender && !seenEvents.has(key);
-      return `<div class="ev${isNew ? " enter" : ""}"><span class="ic ${cls}">${ic}</span><span>${fn(e, who(e.task), who)}</span><span class="when" data-ts="${e.ts}">${ago(e.ts)}</span></div>`;
+      return `<div class="ev${isNew ? " enter" : ""}${cls === "note" ? " note" : ""}"><span class="ic ${icCls}">${ic}</span><span>${fn(e, who(e.task), who)}</span><span class="when" data-ts="${e.ts}">${ago(e.ts)}</span></div>`;
     }).join("") || `<div class="empty">Waiting for activity</div>`;
     for (const e of state.events) seenEvents.add(`${e.ts}|${e.type}|${e.task}`);
   }
@@ -561,18 +621,25 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
   function deriveFromEvents() {
     landing.clear();
     undeclared.clear();
+    lastReview.clear();
     const done = new Set();
+    const attemptDone = new Set(); // stop looking for reviews once we pass the attempt's start
     for (const e of state.events) {
       if (!e.task) continue;
-      if (e.type === "task.queued" && e.data.undeclared?.length && !undeclared.has(e.task)) undeclared.set(e.task, e.data.undeclared);
+      if ((e.type === "task.queued" || e.type === "task.reviewing") && e.data.undeclared?.length && !undeclared.has(e.task)) undeclared.set(e.task, e.data.undeclared);
+      if (!attemptDone.has(e.task)) {
+        if (e.type === "task.reviewed" && !lastReview.has(e.task)) lastReview.set(e.task, e.data);
+        if (e.type === "task.started" || e.type === "task.redo") attemptDone.add(e.task);
+      }
       if (done.has(e.task)) continue;
       if (e.type === "task.landing") landing.add(e.task);
-      if (["task.landing", "task.landed", "task.evicted", "task.queued", "task.started", "task.redo"].includes(e.type)) done.add(e.task);
+      if (["task.landing", "task.landed", "task.evicted", "task.queued", "task.reviewing", "task.started", "task.redo"].includes(e.type)) done.add(e.task);
     }
   }
 
   function render() {
     if (!state) return;
+    assignColors(state.tasks);
     deriveFromEvents();
     renderStats();
     renderBoard();
@@ -639,9 +706,27 @@ main { display: grid; grid-template-columns: 1fr 440px; gap: 16px; padding: 16px
   function stopPolling() { clearInterval(poll); poll = null; }
 
   $("#premote").onclick = () => navigator.clipboard?.writeText(state?.mainRemote || "");
+
+  // One-click demo: seed this project's main and launch the Workers AI swarm.
+  let launching = false;
+  async function launch() {
+    if (launching) return;
+    launching = true;
+    document.querySelectorAll("[data-launch]").forEach((b) => { b.disabled = true; b.textContent = "Seeding main and launching agents…"; });
+    try {
+      const r = await fetch(base + "/demo", { method: "POST" });
+      if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+    } catch (err) {
+      launching = false;
+      document.querySelectorAll("[data-launch]").forEach((b) => { b.disabled = false; b.textContent = "Launch demo swarm"; b.insertAdjacentHTML("afterend", `<div class="err">${esc(err.message)}</div>`); });
+    }
+    if (params.get("launch")) { params.delete("launch"); history.replaceState(null, "", "?" + params); }
+    refresh();
+  }
+  document.addEventListener("click", (e) => { if (e.target.closest("[data-launch]")) launch(); });
   setInterval(() => document.querySelectorAll(".when[data-ts]").forEach((el) => (el.textContent = ago(+el.dataset.ts))), 5000);
 
-  refresh();
+  refresh().then(() => { if (params.get("launch") && state && !state.tasks.length) launch(); });
   connect();
 })();
 </script>
