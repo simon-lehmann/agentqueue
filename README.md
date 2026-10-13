@@ -1,14 +1,97 @@
 # agentqueue
 
-A merge queue for swarms of coding agents, built on Cloudflare Workers, Durable Objects and Artifacts.
-Entry for Cloudflare's "Build the next GitHub" challenge. See [docs/PLAN.md](docs/PLAN.md).
+**A merge queue for swarms of coding agents**, built on Cloudflare Workers, Durable Objects, Artifacts and Workers AI.
 
-## Run
+Pull requests were designed for a handful of humans who rebase reluctantly. Agents are the opposite: there are many of them, they are fast and cheap, and they don't mind redoing work. In one study of 33,596 agent-authored PRs, 41.7% of cross-agent PR pairs conflicted when replayed ([arXiv 2607.04697](https://arxiv.org/abs/2607.04697)). agentqueue borrows what large monorepos already do to keep hundreds of contributors from colliding (Bors, Zuul, Uber's SubmitQueue, Meta's pushrebase) and rebuilds it around agents:
+
+1. **Declare before you write.** An agent states its *intent* and the files it will touch. Claims that overlap a live lease wait. They are forked from main only after the blocker lands, so most conflicts never happen.
+2. **Every task gets its own repo.** Each attempt is an Artifacts fork of main with a short-lived, repo-scoped token. Agents use plain `git`.
+3. **One writer for main.** A Durable Object per project is the only thing that moves main. It squash-lands each task as one linear commit carrying `Agent-Task`, `Agent` and `Claims` trailers.
+4. **Review against intent.** Before queueing, a reviewer model compares the diff with the stated intent and the claims. It sends back incomplete work and edits outside the claimed files.
+5. **Redo, don't resolve.** When review rejects a change, or it still conflicts at merge time, the task is re-forked from the new main. The reason goes back to the agent as feedback and the agent re-executes its intent. Hand-merging is for humans; agents just rerun. Review rounds are capped so retries can't loop forever.
+
+## How it uses Cloudflare
+
+| Piece | Cloudflare product | Role |
+| --- | --- | --- |
+| Project main + per-task forks | **Artifacts** | `create` / `fork` / `createToken` per task; `log`, `readTree`, `readFile` to diff forks and render views without cloning |
+| Coordinator | **Durable Objects** (SQLite) | Leases, queue, review state, event log; single serialized commit point; WebSocket fan-out to the dashboard |
+| Landing | **Workers** + isomorphic-git | In-memory bare mirror of main inside the DO; three-way merge, squash commit, push |
+| Agents | **Durable Objects** + **Workers AI** (`gpt-oss-120b`) | Each demo agent is a DO that plans claims, edits in its fork and retries from feedback |
+| Reviewer | **Workers AI** | Intent-vs-diff review gate before the queue |
+| Dashboard | **Workers static assets** | Live lanes, leases, review verdicts and the main commit rail |
+
+External agents (Claude Code, Codex, humans) join the same queue through the `aq` CLI. It's just HTTP plus git.
+
+## Run it
+
+Requirements: Node 22+, git, a Cloudflare account on the **Workers Paid** plan (Artifacts is in open beta there).
 
 ```sh
 npm install
-cp .cf-credentials.example .cf-credentials   # Cloudflare tokens; Artifacts needs Workers Paid
-cp .dev.vars.example .dev.vars                 # Worker secrets (AQ_API_KEY optional locally)
+cp .cf-credentials.example .cf-credentials   # CLOUDFLARE_API_TOKEN (Workers Scripts Edit) + CLOUDFLARE_ACCOUNT_ID
+cp .dev.vars.example .dev.vars                 # AQ_API_KEY: leave empty locally to disable auth
 set -a; . ./.cf-credentials; set +a
-npm run dev
+npm run dev                                    # http://localhost:8799
 ```
+
+Artifacts and Workers AI have no local emulator, so `wrangler dev` uses the real services through remote bindings.
+
+**Watch a swarm:** open `http://localhost:8799/` and press *Launch demo swarm*. Or:
+
+```sh
+curl -X POST localhost:8799/p/demo-1/demo     # seeds a todo service, launches 8 Workers AI agents
+open "http://localhost:8799/?project=demo-1"
+```
+
+**Scripted scenario** (real git clients; covers parallel lanes, a waiting lease, and review sending a task back for redo):
+
+```sh
+npm run sim
+```
+
+**Bring your own agent:**
+
+```sh
+export AQ_URL=http://localhost:8799            # AQ_KEY=<key> if auth is on
+node scripts/aq.mjs claim -p demo-1 -a claude -m "Add a priority badge to formatTodo" src/format.ts
+cd aq-<task> && $EDITOR src/format.ts && git commit -am "priority badge"
+node scripts/aq.mjs submit .                   # waits; re-checks out the fork with feedback if sent back
+```
+
+**Deploy:**
+
+```sh
+npx wrangler secret put AQ_API_KEY
+npm run deploy
+```
+
+## API
+
+| Route | |
+| --- | --- |
+| `POST /p/:project/init` `{seed?, importUrl?}` | create the project's main repo |
+| `POST /p/:project/tasks` `{intent, claims[], agent}` | claim work → `{task, remote?, token?}` (no remote while waiting) |
+| `GET /p/:project/tasks/:id` | task + fresh fork credentials when working |
+| `POST /p/:project/tasks/:id/submit` | diff fork → review → queue → land |
+| `POST /p/:project/tasks/:id/abandon` | release the lease |
+| `POST /p/:project/swarm` `{goals:[{agent, goal}]}` | launch Workers AI agents |
+| `POST /p/:project/demo` | seed + launch the demo swarm (`demo-*` projects, rate limited) |
+| `GET /p/:project/` · `/commits` · `/files` · `/ws` | state, main history, tree, live events |
+
+Write routes and `GET /tasks/:id` (which hands out a token) require `Authorization: Bearer $AQ_API_KEY` when the secret is set.
+
+## Layout
+
+```
+src/coordinator.ts  RepoCoordinator DO: leases, review gate, merge queue, events
+src/mirror.ts       in-memory git mirror: fetch, three-way merge, squash-land, push
+src/diff.ts         changed paths between commits via Artifacts readTree
+src/agent.ts        SwarmAgent DO: Workers AI coding agent
+src/demo.ts         demo repo + goals
+scripts/aq.mjs      CLI for external agents
+scripts/sim.mjs     scripted end-to-end scenario
+docs/PLAN.md        design notes; docs/research/ holds Artifacts docs + contest terms
+```
+
+MIT licensed.
