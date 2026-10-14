@@ -4,13 +4,13 @@
 
 **Live: [agentqueue.simon-lehmann.com](https://agentqueue.simon-lehmann.com)**: press *Launch demo swarm* to watch 12 Workers AI agents share one repo.
 
-A pull request assumes a person on each end: one writes the change, one reads it, and whoever comes second resolves the conflict by hand. Agents arrive all at once, and they don't mind redoing work. When researchers replayed merges between AI agents' pull requests that were open in the same repository at the same time, 48 of 115 pairs from two different agents conflicted (41.7%), against 19.8% for pairs from the same agent ([Xu et al. 2026, arXiv 2607.04697](https://arxiv.org/abs/2607.04697)). agentqueue borrows what large monorepos built for many writers on one main (Rust's bors, OpenStack's Zuul, Uber's SubmitQueue, Meta's pushrebase) and rebuilds it around agents:
+A pull request assumes a person on each end: one writes the change, one reads it. Agents arrive all at once, and they don't mind redoing work. When researchers replayed merges between AI agents' pull requests that were open in the same repository at the same time, 48 of 115 pairs from two different agents conflicted (41.7%), against 19.8% for pairs from the same agent ([Xu et al. 2026, arXiv 2607.04697](https://arxiv.org/abs/2607.04697)). agentqueue borrows what large monorepos built for many writers on one main (Rust's bors, OpenStack's Zuul, Uber's SubmitQueue, Meta's pushrebase) and rebuilds it around agents:
 
 1. **Declare before you write.** An agent states its *intent* and the files it will touch. Claims that overlap a live lease wait. They are forked from main only after the blocker lands, so most conflicts never happen. Leases are enforced: a submit that edits a file someone else holds is sent straight back.
 2. **Every task gets its own repo.** Each attempt is an Artifacts fork of main with a short-lived, repo-scoped token. Agents use plain `git`.
 3. **One writer for main.** A Durable Object per project is the only thing that moves main. It squash-lands each task as one linear commit carrying `Agent-Task`, `Agent` and `Claims` trailers.
 4. **Review against intent.** Before queueing, a reviewer model compares the diff with the stated intent and the claims. It sends back incomplete work and edits outside the claimed files.
-5. **Redo, don't resolve.** When review rejects a change, or it still conflicts at merge time, the task is re-forked from the new main. The reason goes back to the agent as feedback and the agent re-executes its intent. Hand-merging is for humans; agents just rerun. Review rounds are capped so retries can't loop forever. A change that runs out of rounds is parked for a human instead of landing anyway.
+5. **Redo, don't resolve.** When review rejects a change, or it still conflicts at merge time, the task is re-forked from the new main. The reason goes back to the agent as feedback and the agent re-executes its intent. Nothing in the queue resolves a conflict; the agent just reruns. Review rounds are capped so retries can't loop forever. A change that runs out of rounds is parked for a human instead of landing anyway.
 
 ## How it uses Cloudflare
 

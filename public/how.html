@@ -171,7 +171,7 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; }
 <section class="hero">
   <div class="eyebrow">How it works</div>
   <h1>A merge queue for swarms of coding agents</h1>
-  <p class="lede">A pull request assumes a person on each end: one writes, one reads, and whoever comes second fixes the conflict by hand. agentqueue is built for dozens of agents that arrive all at once and are happy to redo their work. It schedules them around each other before they write, gives every attempt its own repository, reviews each change against what the agent said it would do, and lands everything through a single writer.</p>
+  <p class="lede">A pull request assumes a person on each end: one writes, one reads. agentqueue is built for dozens of agents that arrive all at once and are happy to redo their work. It schedules them around each other before they write, gives every attempt its own repository, reviews each change against what the agent said it would do, and lands everything through a single writer.</p>
   <div class="cta">
     <a class="btn" href="/">Launch a demo</a>
     <a class="btn ghost" href="https://github.com/simon-lehmann/agentqueue">Read the source</a>
@@ -186,7 +186,7 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; }
   <p>The usual tools make this worse:</p>
   <div class="grid">
     <div class="card"><span class="tag red">Conflicts are found too late</span><p>You only learn two agents stepped on each other when the second PR fails to merge, after both have done all their work.</p></div>
-    <div class="card"><span class="tag red">Agents are poor hand-mergers</span><p>Asking an agent to resolve conflict markers in code it didn't write is how subtle bugs get in. The tooling assumes a human who understands both sides.</p></div>
+    <div class="card"><span class="tag red">Resolving means guessing</span><p>Fixing a conflict in someone else's change means guessing what they meant, and an agent can't walk over and ask the agent that wrote it.</p></div>
     <div class="card"><span class="tag red">Review doesn't scale</span><p>Agents open changes faster than anyone can read them, and a large agent change can be too big for a single model call.</p></div>
     <div class="card"><span class="tag red">The why gets lost</span><p>A merged commit says what changed but not what the agent was asked to do, what it waited on, why it was sent back, or who approved it.</p></div>
   </div>
@@ -197,7 +197,7 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; }
   <h2>Borrow from big monorepos, then use what agents are good at</h2>
   <p>Large monorepos hit "many writers, one main" first. The pattern behind Rust's bors, OpenStack's Zuul, Uber's SubmitQueue (built for thousands of commits a day) and Meta's pushrebase is always the same: <b>serialize the commit point, schedule everything else around conflicts, and keep each change small and identifiable.</b></p>
   <div class="lineage"><span>Bors</span><span>Zuul</span><span>Uber SubmitQueue</span><span>Meta pushrebase</span><span>Gerrit Change-Id</span><span>GitLab merge trains</span></div>
-  <p style="margin-top:22px">Agents add one twist humans can't offer: <b>re-running them is cheap</b>. A human whose change conflicts has to resolve it by hand. An agent can throw its attempt away and carry out the same intent again on the new main, with a note saying why.</p>
+  <p style="margin-top:22px">Agents add one twist humans can't offer: <b>re-running them is cheap</b>. A conflict normally means someone, a person or an agent, reads both sides and decides what the other change meant. An agent can throw its attempt away and carry out the same intent again on the new main, with a note saying why.</p>
   <div class="quote">Declare before you write. Redo, don't resolve.</div>
 </section>
 
@@ -216,7 +216,7 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; }
   </ol>
   <div class="redo-loop">
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10a7 7 0 1 0 2-4.9M3 3v4h4"/></svg>
-    <div><b>The redo loop.</b> If review requests changes, the agent edited someone else's files, or the merge still conflicts, the attempt is thrown away. The task is re-forked from the new main and sent back to the agent with the reason. The agent re-executes its intent; nobody hand-merges.</div>
+    <div><b>The redo loop.</b> If review requests changes, the agent edited someone else's files, or the merge still conflicts, the attempt is thrown away. The task is re-forked from the new main and sent back to the agent with the reason. The agent re-executes its intent; no step in the queue resolves a conflict.</div>
   </div>
 
   <div style="margin-top:40px">
@@ -296,7 +296,7 @@ Rename the product to Acme in the README heading
     <div class="num"><b>12 / 12</b><span>demo agents landed on one repo, with overlapping goals scheduled around each other</span></div>
     <div class="num"><b>10k lines</b><span>one refactor across 100 files: 8 review chunks, ~18s review, ~4s to land</span></div>
     <div class="num"><b>30k lines</b><span>300 files: 22 chunks reviewed in parallel in ~35s</span></div>
-    <div class="num"><b>0</b><span>hand-resolved conflicts; every collision becomes a redo with a reason</span></div>
+    <div class="num"><b>0</b><span>merge conflicts in both recorded demo runs; every redo came from review or a lease, with a reason</span></div>
   </div>
   <div class="card" style="margin-top:22px">
     <span class="tag accent">Try it: the large-scale demo</span>

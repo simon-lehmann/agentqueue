@@ -17,10 +17,10 @@ Big repos already solved "hundreds of concurrent contributors". The recurring pr
 2. Use the dependency graph to decide which changes commute → parallel lanes (Uber SubmitQueue, Google TAP).
 3. Small changes with stable IDs (Gerrit Change-Id, stacks).
 4. Predict/prevent conflicts before work starts (leases, continuous merge-tree).
-5. Make conflicts cheap: evict + redo on new main instead of hand-merging.
+5. Make conflicts cheap: evict + redo on new main instead of resolving conflicts.
 
 Agent twist: agents are cheap to re-run, so an evicted change is **re-executed from its stated
-intent** on the new main rather than merged by hand.
+intent** on the new main rather than having its conflicts resolved.
 
 ## Architecture
 - **Worker (API + dashboard)** — task intake, token minting, UI.
