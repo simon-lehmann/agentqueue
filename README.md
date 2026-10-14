@@ -83,7 +83,7 @@ npm run deploy
 **Read a project's history:** every landed commit carries its story as git trailers.
 
 ```sh
-git log --format='%h %s%n%(trailers:indent=4)'
+git log --format='%h %s%n%w(0,4,4)%(trailers)'
 ```
 
 ```

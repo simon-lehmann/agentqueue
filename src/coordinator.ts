@@ -386,6 +386,7 @@ export class RepoCoordinator extends DurableObject<Env> {
 	// and who reviewed it. Readable with `git log --format=%(trailers)`.
 	private trailers(t: Task): string[] {
 		const one = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+		const paths = (ps: string[] = []) => (ps.length > 3 ? `${ps.slice(0, 3).join(", ")} and ${ps.length - 3} more` : ps.join(", "));
 		const events = this.sql
 			.exec(`SELECT type, data FROM events WHERE task = ? AND type IN ('task.waiting','task.reviewed','task.evicted','task.trespass','task.redo','task.queued') ORDER BY id`, t.id)
 			.toArray()
@@ -397,8 +398,8 @@ export class RepoCoordinator extends DurableObject<Env> {
 		let human = false;
 		for (const e of events) {
 			if (e.type === "task.waiting") out.push(`Waited-For: ${e.data.blockedBy.map((b: string) => `${name(b)} (#${b})`).join(", ")}`);
-			if (e.type === "task.evicted") reason = `merge conflict on ${e.data.conflicts?.join(", ") || "overlapping lines"}`;
-			if (e.type === "task.trespass") reason = `edited ${e.data.paths.join(", ")} under another agent's lease`;
+			if (e.type === "task.evicted") reason = `merge conflict on ${paths(e.data.conflicts) || "overlapping lines"}`;
+			if (e.type === "task.trespass") reason = `edited ${paths(e.data.paths)} under another agent's lease`;
 			if (e.type === "task.reviewed") {
 				review = e.data;
 				if (e.data.approve === false) reason = `review: ${one(e.data.comments)}`;

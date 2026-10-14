@@ -275,7 +275,7 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; }
       <div>
         <h3>The context lives in git</h3>
         <p>Every landed commit carries the task's story as standard git trailers: what was claimed, whom it waited for, every redo and why, and who reviewed it. Any git client can read it, and it survives clones, mirrors and exports.</p>
-<pre><code><span class="t-c">$ git log --format='%s%n%(trailers:indent=4)'</span>
+<pre><code><span class="t-c">$ git log --format='%s%n%w(0,4,4)%(trailers)'</span>
 Rename the product to Acme in the README heading
     <span class="t-k">Agent-Task:</span> 7ertf3
     <span class="t-k">Agent:</span> dave
