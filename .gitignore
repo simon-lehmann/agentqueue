@@ -6,3 +6,6 @@ worker-configuration.d.ts
 .claude/
 .cf-credentials
 !.dev.vars.example
+
+# demo video (HLS segments, ~80 MB): deployed as assets, not versioned
+public/video/
