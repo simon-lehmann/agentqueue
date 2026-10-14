@@ -171,7 +171,7 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; }
 <section class="hero">
   <div class="eyebrow">How it works</div>
   <h1>A merge queue for swarms of coding agents</h1>
-  <p class="lede">Pull requests were built for a few humans who rebase reluctantly. agentqueue is built for dozens of agents that are fast, cheap and happy to redo their work. It schedules them around each other before they write, gives every attempt its own repository, reviews each change against what the agent said it would do, and lands everything through a single writer.</p>
+  <p class="lede">A pull request assumes a person on each end: one writes, one reads, and whoever comes second fixes the conflict by hand. agentqueue is built for dozens of agents that arrive all at once and are happy to redo their work. It schedules them around each other before they write, gives every attempt its own repository, reviews each change against what the agent said it would do, and lands everything through a single writer.</p>
   <div class="cta">
     <a class="btn" href="/">Launch a demo</a>
     <a class="btn ghost" href="https://github.com/simon-lehmann/agentqueue">Read the source</a>
@@ -182,12 +182,12 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; }
   <div class="eyebrow">The problem</div>
   <h2>Git workflows assume few writers. Agents bring many.</h2>
   <p>Point several coding agents at one repository and they collide constantly. Each branches from a slightly different main and edits the same hot files. Each opens a pull request that is out of date by the time anyone looks at it.</p>
-  <div class="stat-big"><b>41.7%</b><span>of cross-agent pull-request pairs conflicted when replayed, in a study of 33,596 agent-authored PRs (<a href="https://arxiv.org/abs/2607.04697">arXiv 2607.04697</a>).</span></div>
+  <div class="stat-big"><b>41.7%</b><span>of replayed merges between pull requests from two different AI agents, open in the same repository at the same time, conflicted: 48 of 115 pairs, against 19.8% for pairs from the same agent (<a href="https://arxiv.org/abs/2607.04697">Xu et al. 2026, arXiv 2607.04697</a>).</span></div>
   <p>The usual tools make this worse:</p>
   <div class="grid">
     <div class="card"><span class="tag red">Conflicts are found too late</span><p>You only learn two agents stepped on each other when the second PR fails to merge, after both have done all their work.</p></div>
     <div class="card"><span class="tag red">Agents are poor hand-mergers</span><p>Asking an agent to resolve conflict markers in code it didn't write is how subtle bugs get in. The tooling assumes a human who understands both sides.</p></div>
-    <div class="card"><span class="tag red">Review doesn't scale</span><p>A dozen agents produce more diffs than anyone can read. Large agent changes (10k-line refactors are common) are unreviewable by hand and too big for a single model call.</p></div>
+    <div class="card"><span class="tag red">Review doesn't scale</span><p>Agents open changes faster than anyone can read them, and a large agent change can be too big for a single model call.</p></div>
     <div class="card"><span class="tag red">The why gets lost</span><p>A merged commit says what changed but not what the agent was asked to do, what it waited on, why it was sent back, or who approved it.</p></div>
   </div>
 </section>
@@ -195,7 +195,7 @@ footer { padding: 36px 0 60px; color: var(--muted); font-size: 14px; }
 <section id="idea">
   <div class="eyebrow">The core idea</div>
   <h2>Borrow from big monorepos, then use what agents are good at</h2>
-  <p>Large monorepos solved "hundreds of contributors, one main" years ago. The pattern behind Bors, Zuul, Uber's SubmitQueue and Meta's pushrebase is always the same: <b>serialize the commit point, schedule everything else around conflicts, and keep each change small and identifiable.</b></p>
+  <p>Large monorepos hit "many writers, one main" first. The pattern behind Rust's bors, OpenStack's Zuul, Uber's SubmitQueue (built for thousands of commits a day) and Meta's pushrebase is always the same: <b>serialize the commit point, schedule everything else around conflicts, and keep each change small and identifiable.</b></p>
   <div class="lineage"><span>Bors</span><span>Zuul</span><span>Uber SubmitQueue</span><span>Meta pushrebase</span><span>Gerrit Change-Id</span><span>GitLab merge trains</span></div>
   <p style="margin-top:22px">Agents add one twist humans can't offer: <b>re-running them is cheap</b>. A human whose change conflicts has to resolve it by hand. An agent can throw its attempt away and carry out the same intent again on the new main, with a note saying why.</p>
   <div class="quote">Declare before you write. Redo, don't resolve.</div>
